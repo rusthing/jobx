@@ -1,0 +1,27 @@
+[package]
+name = "jobx-api-client"
+version = "0.1.0"
+edition = "2024"
+authors = ["zbz"]
+license = "MIT"
+keywords = ["job", "api-client", "client"]
+description = "API client for JobX, a job scheduling and task management system"
+categories = ["web-programming::http-server"]
+homepage = "https://github.com/rusthing/jobx"
+repository = "https://github.com/rusthing/jobx"
+readme = "README.md"
+
+[dependencies]
+anyhow = { workspace = true }
+tracing = { workspace = true }
+arc-swap = { workspace = true }
+config = { workspace = true }
+reqwest = { workspace = true, features = ["multipart", "json", "stream"] }
+serde = { workspace = true, features = ["derive"] }
+serde_with = { workspace = true }
+serde_json = { workspace = true }
+utoipa = { workspace = true, features = ["axum_extras"] }
+
+wheel-rs = { workspace = true }
+robotech = { workspace = true, features = ["feign", "macros", "registry-center"] }
+jobx-api = { workspace = true }
