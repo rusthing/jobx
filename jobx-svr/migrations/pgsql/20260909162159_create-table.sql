@@ -1,6 +1,6 @@
 /*==============================================================*/
 /* DBMS name:      PostgreSQL 9.x                               */
-/* Created on:     2026/9/9 12:35:00                            */
+/* Created on:     2026/9/9 16:21:59                            */
 /*==============================================================*/
 
 
@@ -17,7 +17,7 @@ create table jobx_job (
                           interval_duration    VARCHAR(10)          null,
                           valid_begin_ts       INT8                 null,
                           valid_end_ts         INT8                 null,
-                          next_trigger_ts      INT8                 null,
+                          next_trigger_ts      INT8                 not null,
                           remark               VARCHAR(50)          null,
                           enabled              BOOL                 not null default true,
                           creator_id           INT8                 not null,
@@ -96,14 +96,16 @@ create unique index jobx_job_PK on jobx_job (
 create table jobx_task (
                            id                   INT8                 not null,
                            job_id               INT8                 null,
-                           status               INT8                 null,
+                           status               INT2                 not null default 0,
+                           scheduled_ts         INT8                 not null,
                            start_ts             INT8                 null,
                            end_ts               INT8                 null,
                            creator_id           INT8                 not null,
                            create_ts            INT8                 not null,
                            updator_id           INT8                 not null,
                            update_ts            INT8                 not null,
-                           constraint PK_JOBX_TASK primary key (id)
+                           constraint PK_JOBX_TASK primary key (id),
+                           constraint AK_JOB_ID_AND_SCHEDUL_JOBX_TASK unique (job_id, scheduled_ts)
 );
 
 comment on table jobx_task is
@@ -117,12 +119,13 @@ comment on column jobx_task.job_id is
 
 comment on column jobx_task.status is
 '任务状态
-0: 待分派
-1: 待处理
-2: 运行中
-3: 成功
-4: 失败
-5: 超时';
+0: 运行中
+1: 成功
+2: 失败
+';
+
+comment on column jobx_task.scheduled_ts is
+'预定执行时间戳';
 
 comment on column jobx_task.start_ts is
 '开始执行时间戳';

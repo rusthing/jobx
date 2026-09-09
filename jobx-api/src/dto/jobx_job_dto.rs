@@ -19,7 +19,7 @@ pub struct JobxJobDto {
     /// 有效结束时间戳
     pub valid_end_ts: Option<i64>,
     /// 下次触发时间戳
-    pub next_trigger_ts: Option<i64>,
+    pub next_trigger_ts: i64,
     /// 备注
     pub remark: Option<String>,
     /// 启用

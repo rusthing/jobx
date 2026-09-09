@@ -19,7 +19,7 @@ pub struct Model {
     pub interval_duration: Option<String>,
     pub valid_begin_ts: Option<i64>,
     pub valid_end_ts: Option<i64>,
-    pub next_trigger_ts: Option<i64>,
+    pub next_trigger_ts: i64,
     pub remark: Option<String>,
     pub enabled: bool,
     pub creator_id: i64,

@@ -1,6 +1,6 @@
 /*==============================================================*/
 /* DBMS name:      MySQL 5.0                                    */
-/* Created on:     2026/9/9 12:34:08                            */
+/* Created on:     2026/9/9 16:21:27                            */
 /*==============================================================*/
 
 
@@ -21,9 +21,9 @@ create table jobx_job
    interval_duration    varchar(10)  comment '固定间隔时间',
    valid_begin_ts       bigint  comment '有效开始时间戳',
    valid_end_ts         bigint  comment '有效结束时间戳',
-   next_trigger_ts      bigint  comment '下次触发时间戳',
+   next_trigger_ts      bigint not null  comment '下次触发时间戳',
    remark               varchar(50)  comment '备注',
-   enabled              bool not null default true  comment '启用',
+   enabled              bit(1) not null default true  comment '启用',
    creator_id           bigint not null  comment '创建人的用户ID',
    create_ts            bigint not null  comment '建立时间戳',
    updator_id           bigint not null  comment '修改人的用户ID',
@@ -42,20 +42,20 @@ create table jobx_task
 (
    id                   bigint not null  comment 'ID',
    job_id               bigint  comment '任务计划ID',
-   status               bigint  comment '任务状态
-             0: 待分派
-             1: 待处理
-             2: 运行中
-             3: 成功
-             4: 失败
-             5: 超时',
+   status               tinyint not null default 0  comment '任务状态
+             0: 运行中
+             1: 成功
+             2: 失败
+             ',
+   scheduled_ts         bigint not null  comment '预定执行时间戳',
    start_ts             bigint  comment '开始执行时间戳',
    end_ts               bigint  comment '结束执行时间戳',
    creator_id           bigint not null  comment '创建人的用户ID',
    create_ts            bigint not null  comment '建立时间戳',
    updator_id           bigint not null  comment '修改人的用户ID',
    update_ts            bigint not null  comment '修改时间戳',
-   primary key (id)
+   primary key (id),
+   unique key AK_job_id_and_scheduled_ts (job_id, scheduled_ts)
 );
 
 alter table jobx_task comment '任务记录';
