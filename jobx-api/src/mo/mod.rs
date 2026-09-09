@@ -2,6 +2,5 @@
 
 pub mod prelude;
 
-pub mod job;
-pub mod task;
-pub mod schedule;
+pub mod jobx_job;
+pub mod jobx_task;

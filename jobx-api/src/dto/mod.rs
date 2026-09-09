@@ -1,7 +1,5 @@
-pub mod job_dto;
-pub mod task_dto;
-pub mod schedule_dto;
+pub mod jobx_job_dto;
+pub mod jobx_task_dto;
 
-pub use job_dto::*;
-pub use task_dto::*;
-pub use schedule_dto::*;
+pub use jobx_job_dto::*;
+pub use jobx_task_dto::*;

@@ -22,3 +22,4 @@ max-retry-count = 3
 
 [db]
 url = "postgres://jobx:jobx@pgsql:5432/jobx"
+#url = "mysql://jobx:jobx@mysql:3306/jobx"

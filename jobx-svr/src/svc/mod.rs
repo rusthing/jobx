@@ -1,7 +1,5 @@
-mod job_svc;
-mod task_svc;
-mod schedule_svc;
+mod jobx_job_svc;
+mod jobx_task_svc;
 
-pub use job_svc::*;
-pub use task_svc::*;
-pub use schedule_svc::*;
+pub use jobx_job_svc::*;
+pub use jobx_task_svc::*;

@@ -1,3 +1,2 @@
-mod job_router;
-mod task_router;
-mod schedule_router;
+mod jobx_job_router;
+mod jobx_task_router;
