@@ -9,11 +9,11 @@ pub struct JobxTaskVo {
     /// 任务状态: 0=运行中, 1=成功, 2=失败
     pub status: i16,
     /// 预定执行时间戳
-    pub scheduled_ts: i64,
+    pub scheduled_ts: u64,
     /// 开始执行时间戳
-    pub start_ts: Option<i64>,
+    pub start_ts: Option<u64>,
     /// 结束执行时间戳
-    pub end_ts: Option<i64>,
+    pub end_ts: Option<u64>,
     /// 创建者ID
     pub creator_id: u64,
     /// 创建时间

@@ -17,11 +17,11 @@ pub struct JobxJobVo {
     /// 固定间隔时间
     pub interval_duration: Option<String>,
     /// 有效开始时间戳
-    pub valid_begin_ts: Option<i64>,
+    pub valid_begin_ts: Option<u64>,
     /// 有效结束时间戳
-    pub valid_end_ts: Option<i64>,
+    pub valid_end_ts: Option<u64>,
     /// 下次触发时间戳
-    pub next_trigger_ts: i64,
+    pub next_trigger_ts: u64,
     /// 备注
     pub remark: Option<String>,
     /// 启用
