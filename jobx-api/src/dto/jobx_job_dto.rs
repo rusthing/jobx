@@ -11,6 +11,7 @@ pub struct JobxJobDto {
     /// 计划类型: 0=手动分派, 1=cron表达式, 2=固定延迟, 3=固定频率
     pub job_type: i16,
     /// 是否高频任务
+    #[db_default]
     pub high_freq: bool,
     /// cron表达式
     pub cron: Option<String>,
@@ -27,5 +28,6 @@ pub struct JobxJobDto {
     /// 备注
     pub remark: Option<String>,
     /// 启用
+    #[db_default]
     pub enabled: bool,
 }
