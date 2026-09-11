@@ -10,8 +10,10 @@ pub struct JobxJobVo {
     pub name: String,
     /// 参数
     pub params: Option<String>,
-    /// 计划类型: 1=cron表达式, 2=固定延迟, 3=固定频率
-    pub scheduling_type: i16,
+    /// 计划类型: 0=手动分派, 1=cron表达式, 2=固定延迟, 3=固定频率
+    pub job_type: i16,
+    /// 是否高频任务
+    pub high_freq: bool,
     /// cron表达式
     pub cron: Option<String>,
     /// 固定间隔时间
@@ -20,8 +22,10 @@ pub struct JobxJobVo {
     pub valid_begin_ts: Option<u64>,
     /// 有效结束时间戳
     pub valid_end_ts: Option<u64>,
-    /// 下次触发时间戳
-    pub next_trigger_ts: u64,
+    /// 提前分派时间
+    pub pre_assign_duration: Option<String>,
+    /// 下次分派时间戳
+    pub next_assign_ts: u64,
     /// 备注
     pub remark: Option<String>,
     /// 启用

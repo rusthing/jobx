@@ -36,8 +36,9 @@ robotech = "1.16.0"
 robotech-macros = "1.16.0"
 jobx-api = { version = "0.1.0", path = "./jobx-api" }
 
-#[patch.crates-io]
-#wheel-rs = { path = "../wheel-rs" }
-#robotech = { path = "../robotech-rs/robotech" }
-#robotech-macros = { path = "../robotech-rs/robotech-macros" }
-#jobx-api = { path = "./jobx-api" }
+[patch.crates-io]
+#idworker = { path = "../idworker" }
+wheel-rs = { path = "../wheel-rs" }
+robotech = { path = "../robotech-rs/robotech" }
+robotech-macros = { path = "../robotech-rs/robotech-macros" }
+jobx-api = { path = "./jobx-api" }
