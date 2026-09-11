@@ -1,6 +1,6 @@
 /*==============================================================*/
 /* DBMS name:      MySQL 5.0                                    */
-/* Created on:     2026/9/11 14:50:57                           */
+/* Created on:     2026/9/11 16:49:19                           */
 /*==============================================================*/
 
 
@@ -18,7 +18,7 @@ create table jobx_job
              1: cron表达式
              2: 固定延迟
              3: 固定频率',
-    high_freq            bit(1) not null  comment '是否高频任务',
+    high_freq            bit(1) not null default false  comment '是否高频任务',
     cron                 varchar(30)  comment 'cron表达式',
     interval_duration    varchar(10)  comment '固定间隔时间',
     valid_begin_ts       bigint  comment '有效开始时间戳',

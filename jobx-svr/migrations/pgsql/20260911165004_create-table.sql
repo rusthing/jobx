@@ -1,6 +1,6 @@
 /*==============================================================*/
 /* DBMS name:      PostgreSQL 9.x                               */
-/* Created on:     2026/9/11 14:51:47                           */
+/* Created on:     2026/9/11 16:50:04                           */
 /*==============================================================*/
 
 
@@ -13,7 +13,7 @@ create table jobx_job (
                           name                 VARCHAR(50)          not null,
                           params               VARCHAR(800)         null,
                           job_type             INT2                 not null,
-                          high_freq            BOOL                 not null,
+                          high_freq            BOOL                 not null default false,
                           cron                 VARCHAR(30)          null,
                           interval_duration    VARCHAR(10)          null,
                           valid_begin_ts       INT8                 null,
@@ -117,7 +117,7 @@ create table jobx_task (
                            updator_id           INT8                 not null,
                            update_ts            INT8                 not null,
                            constraint PK_JOBX_TASK primary key (id),
-                           constraint AK_JOB_ID_AND_SCHEDULED_ASSIGN_TS unique (job_id, assign_ts)
+                           constraint AK_JOB_ID_AND_SCHEDUL_JOBX_TASK unique (job_id, assign_ts)
 );
 
 comment on table jobx_task is
