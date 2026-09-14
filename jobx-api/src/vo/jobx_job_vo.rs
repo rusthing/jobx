@@ -12,7 +12,6 @@ pub struct JobxJobVo {
     /// 参数
     pub params: Option<String>,
     /// 计划类型: 0=手动分派, 1=cron表达式, 2=固定延迟, 3=固定频率
-    #[from(JobType::from_i16(~).unwrap_or_default())]
     pub job_type: JobType,
     /// 是否高频任务
     pub high_freq: bool,

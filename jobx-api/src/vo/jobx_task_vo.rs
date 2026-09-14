@@ -6,7 +6,6 @@ pub struct JobxTaskVo {
     /// ID
     pub id: u64,
     /// 任务类型: 1=立即执行, 2=计划执行
-    #[from(TaskType::from_i16(~).unwrap_or_default())]
     pub task_type: TaskType,
     /// 任务计划ID
     pub job_id: Option<u64>,

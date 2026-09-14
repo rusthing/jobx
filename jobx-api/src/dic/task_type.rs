@@ -1,6 +1,5 @@
 use sea_orm::{ColIdx, DbErr, QueryResult, TryGetError, TryGetable};
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use strum::{AsRefStr, Display, EnumString};
 use utoipa::ToSchema;
 
@@ -52,11 +51,9 @@ impl From<TaskType> for i16 {
     }
 }
 
-impl TryFrom<i16> for TaskType {
-    type Error = InvalidTaskTypeError;
-
-    fn try_from(value: i16) -> Result<Self, Self::Error> {
-        Self::from_i16(value).ok_or(InvalidTaskTypeError(value))
+impl From<i16> for TaskType {
+    fn from(v: i16) -> Self {
+        Self::from_i16(v).unwrap_or_default()
     }
 }
 
@@ -67,14 +64,3 @@ impl TryGetable for TaskType {
             .ok_or_else(|| TryGetError::DbErr(DbErr::Custom(format!("invalid task type value: {value}"))))
     }
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct InvalidTaskTypeError(pub i16);
-
-impl fmt::Display for InvalidTaskTypeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "invalid task type value: {}", self.0)
-    }
-}
-
-impl std::error::Error for InvalidTaskTypeError {}

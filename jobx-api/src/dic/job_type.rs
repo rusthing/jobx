@@ -1,6 +1,5 @@
 use sea_orm::{ColIdx, DbErr, QueryResult, TryGetError, TryGetable};
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use strum::{AsRefStr, Display, EnumString};
 use utoipa::ToSchema;
 
@@ -58,11 +57,9 @@ impl From<JobType> for i16 {
     }
 }
 
-impl TryFrom<i16> for JobType {
-    type Error = InvalidJobTypeError;
-
-    fn try_from(value: i16) -> Result<Self, Self::Error> {
-        Self::from_i16(value).ok_or(InvalidJobTypeError(value))
+impl From<i16> for JobType {
+    fn from(v: i16) -> Self {
+        Self::from_i16(v).unwrap_or_default()
     }
 }
 
@@ -73,14 +70,3 @@ impl TryGetable for JobType {
             .ok_or_else(|| TryGetError::DbErr(DbErr::Custom(format!("invalid job type value: {value}"))))
     }
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct InvalidJobTypeError(pub i16);
-
-impl fmt::Display for InvalidJobTypeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "invalid job type value: {}", self.0)
-    }
-}
-
-impl std::error::Error for InvalidJobTypeError {}
