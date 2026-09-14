@@ -1,4 +1,4 @@
-use crate::dic::TaskType;
+use crate::dic::{TaskStatus, TaskType};
 use robotech::macros::crud_dto;
 
 #[crud_dto]
@@ -9,7 +9,7 @@ pub struct JobxTaskDto {
     pub job_id: Option<u64>,
     /// 任务状态: 0=运行中, 1=成功, 2=失败
     #[db_default]
-    pub status: i16,
+    pub status: TaskStatus,
     /// 分派时间戳
     pub assign_ts: u64,
     /// 预定分派时间戳

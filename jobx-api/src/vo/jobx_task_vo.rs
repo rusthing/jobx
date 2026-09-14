@@ -1,4 +1,4 @@
-use crate::dic::TaskType;
+use crate::dic::{TaskStatus, TaskType};
 use robotech::macros::vo;
 
 #[vo]
@@ -10,7 +10,7 @@ pub struct JobxTaskVo {
     /// 任务计划ID
     pub job_id: Option<u64>,
     /// 任务状态: 0=运行中, 1=成功, 2=失败
-    pub status: i16,
+    pub status: TaskStatus,
     /// 分派时间戳
     pub assign_ts: u64,
     /// 预定分派时间戳
