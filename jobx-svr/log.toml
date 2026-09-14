@@ -1,7 +1,6 @@
-[log]
 level = "debug"
 
-[log.modules]
+[modules]
 "h2::codec" = "info"
 "h2::proto" = "info"
 "tower::buffer" = "info"
