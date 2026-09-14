@@ -1,3 +1,4 @@
+use crate::dic::TaskType;
 use robotech::macros::vo;
 
 #[vo]
@@ -5,7 +6,8 @@ pub struct JobxTaskVo {
     /// ID
     pub id: u64,
     /// 任务类型: 1=立即执行, 2=计划执行
-    pub task_type: i16,
+    #[from(TaskType::from_i16(~).unwrap_or_default())]
+    pub task_type: TaskType,
     /// 任务计划ID
     pub job_id: Option<u64>,
     /// 任务状态: 0=运行中, 1=成功, 2=失败

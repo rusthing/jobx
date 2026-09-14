@@ -1,6 +1,7 @@
 use crate::config::jobx_config::JobxConfig;
 use idworker::IdWorkerConfig;
 use robotech::db::DbConnConfig;
+use robotech::redis::RedisConfig;
 use robotech::web::WebServerConfig;
 use serde::Deserialize;
 
@@ -9,7 +10,6 @@ use serde::Deserialize;
 #[serde(rename_all = "kebab-case")]
 pub struct AppConfig {
     /// jobx
-    #[serde(default = "JobxConfig::default")]
     pub jobx: JobxConfig,
     /// db
     pub db: DbConnConfig,
@@ -19,4 +19,6 @@ pub struct AppConfig {
     /// id_worker
     #[serde(default = "IdWorkerConfig::default")]
     pub id_worker: IdWorkerConfig,
+    /// redis
+    pub redis: RedisConfig,
 }

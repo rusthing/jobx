@@ -7,10 +7,11 @@ profile = "dev"
 #[micro-svc.consul.registry]
 #sub-net = "192.168.1.0/24"
 
-[jobx]
-scheduler-workers = 4
-task-timeout-seconds = 3600
-max-retry-count = 3
+
+[jobx.scheduler]
+
+[redis]
+url = "redis://:xxxxxxxx@redis:6379"
 
 [db]
 url = "postgres://jobx:jobx@pgsql:5432/jobx"

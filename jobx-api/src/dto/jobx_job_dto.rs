@@ -1,3 +1,4 @@
+use crate::dic::JobType;
 use robotech::macros::crud_dto;
 
 #[crud_dto]
@@ -9,7 +10,7 @@ pub struct JobxJobDto {
     /// 参数
     pub params: Option<String>,
     /// 计划类型: 0=手动分派, 1=cron表达式, 2=固定延迟, 3=固定频率
-    pub job_type: i16,
+    pub job_type: JobType,
     /// 是否高频任务
     #[db_default]
     pub high_freq: bool,

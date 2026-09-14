@@ -11,6 +11,7 @@ use robotech::env::init_env;
 use robotech::log::LogWatcher;
 use robotech::macros::{db_migrate, log_call};
 use robotech::micro_svc::{drop_hub_client, register_micro_svc};
+use robotech::redis::setup_redis_conn;
 use robotech::signal::SignalManager;
 use robotech::web::{setup_web_server, stop_web_service};
 use std::collections::HashMap;
@@ -105,9 +106,10 @@ async fn setup(
     db_migrate!(db_url);
 
     setup_id_worker(app_config.id_worker.clone(), &changed)?;
-    setup_jobx_config(app_config.jobx.clone(), &changed);
+    setup_redis_conn(app_config.redis.clone(), &None).await?;
     setup_db_conn(app_config.db.clone(), &changed).await?;
 
+    setup_jobx_config(app_config.jobx.clone(), &changed);
     setup_web_server(app_config.web.clone(), port, old_pid, &changed).await?;
 
     Ok(())

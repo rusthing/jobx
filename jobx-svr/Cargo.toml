@@ -21,6 +21,7 @@ derive_setters = { workspace = true }
 typed-builder = { workspace = true }
 arc-swap = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 serde_with = { workspace = true }
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "signal"] }
 tokio-util = { workspace = true }
@@ -37,7 +38,7 @@ utoipa-swagger-ui = { workspace = true, features = ["axum", "vendored"] }
 
 wheel-rs = { workspace = true }
 idworker = { workspace = true, features = ["utils"] }
-robotech = { workspace = true, features = ["db", "config-center", "registry-center", "macros"] }
+robotech = { workspace = true, features = ["db", "config-center", "registry-center", "macros", "redis"] }
 jobx-api = { workspace = true, features = ["server"] }
 
 [build-dependencies]
