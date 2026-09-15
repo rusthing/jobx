@@ -20,7 +20,12 @@ use sea_orm::ExprTrait;
 pub struct JobxJobDao;
 
 impl JobxJobDao {
-    pub async fn find_publishable<C>(begin: i64, end: i64, db: &C) -> Result<Vec<Model>, DaoError>
+    pub async fn find_publishable<C>(
+        begin: i64,
+        end: i64,
+        now: i64,
+        db: &C,
+    ) -> Result<Vec<Model>, DaoError>
     where
         C: ConnectionTrait,
     {
@@ -44,6 +49,16 @@ impl JobxJobDao {
             .filter(Column::JobType.ne(JobType::Manual.value()))
             .filter(Column::NextAssignTs.gte(begin))
             .filter(Column::NextAssignTs.lte(end))
+            .filter(
+                Condition::any()
+                    .add(Column::ValidBeginTs.is_null())
+                    .add(Column::ValidBeginTs.lte(now)),
+            )
+            .filter(
+                Condition::any()
+                    .add(Column::ValidEndTs.is_null())
+                    .add(Column::ValidEndTs.gte(now)),
+            )
             .filter(SimpleExpr::from(Expr::exists(not_exists).not()))
             .all(db)
             .await

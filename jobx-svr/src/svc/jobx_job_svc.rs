@@ -24,7 +24,7 @@ impl JobxJobSvc {
         let begin = now - config.query_start_earlier_duration.as_millis() as i64;
         let end = now + config.query_end_later_duration.as_millis() as i64;
 
-        let jobs = JobxJobDao::find_publishable(begin, end, db).await?;
+        let jobs = JobxJobDao::find_publishable(begin, end, now, db).await?;
 
         if jobs.is_empty() {
             return Ok(());
