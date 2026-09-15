@@ -1,3 +1,4 @@
+#[cfg(feature = "server")]
 use sea_orm::{ColIdx, DbErr, QueryResult, TryGetError, TryGetable};
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumString};
@@ -63,6 +64,7 @@ impl From<i16> for JobType {
     }
 }
 
+#[cfg(feature = "server")]
 impl TryGetable for JobType {
     fn try_get_by<I: ColIdx>(res: &QueryResult, idx: I) -> Result<Self, TryGetError> {
         let value = <i16 as TryGetable>::try_get_by(res, idx)?;
