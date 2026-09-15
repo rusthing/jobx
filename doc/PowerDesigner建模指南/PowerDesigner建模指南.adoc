@@ -49,24 +49,43 @@ image::Entity显示code3.png[Entity显示code3]
 .. MySQL
 +
 原:
-`alter table %TABLE%
-alter table [%CQUALIFIER%]%CHILD% add [constraint %CONSTNAME% ]foreign key[%R%? %CONSTNAME%] (%FKEYCOLUMNS%)
-references [%PQUALIFIER%]%PARENT%[ (%CKEYCOLUMNS%)][ %ReferenceMatch%][ on delete %DELCONST%][ on update %UPDCONST%]`
 +
-改: `alter table [%CQUALIFIER%]%CHILD% add [constraint fk_%FKEYCOLUMNS%__from__%PARENT% ]foreign key[%R%? %CONSTNAME%] (%FKEYCOLUMNS%)
-references [%PQUALIFIER%]%PARENT%[ (%CKEYCOLUMNS%)][ %ReferenceMatch%][ on delete %DELCONST%][ on update %UPDCONST%]`
+[source,text]
+----
+alter table [%CQUALIFIER%]%CHILD% add [constraint %CONSTNAME% ]foreign key[%R%? %CONSTNAME%] (%FKEYCOLUMNS%)
+      references [%PQUALIFIER%]%PARENT%[ (%CKEYCOLUMNS%)][ %ReferenceMatch%][ on delete %DELCONST%][ on update %UPDCONST%]
++
+----
++
+改:
++
+[source,text]
+----
+alter table [%CQUALIFIER%]%CHILD% add [constraint fk_%FKEYCOLUMNS%__from__%PARENT% ]foreign key[%R%? %CONSTNAME%] (%FKEYCOLUMNS%)
+      references [%PQUALIFIER%]%PARENT%[ (%CKEYCOLUMNS%)][ %ReferenceMatch%][ on delete %DELCONST%][ on update %UPDCONST%]
+----
 
 .. PostgreSQL
 +
-原: `alter table %TABLE%
-add [constraint %CONSTNAME% ]foreign key (%FKEYCOLUMNS%)
-references %PARENT%[ (%CKEYCOLUMNS%)]
-[ on delete %DELCONST%][ on update %UPDCONST%][%Deferrable%? deferrable[%ForeignKeyConstraintDeferred%? initially deferred: initially immediate]]`
+原:
 +
-改: `alter table %TABLE%
-add [constraint fk_%FKEYCOLUMNS%__from__%PARENT% ]foreign key (%FKEYCOLUMNS%)
-references %PARENT%[ (%CKEYCOLUMNS%)]
-[ on delete %DELCONST%][ on update %UPDCONST%][%Deferrable%? deferrable[%ForeignKeyConstraintDeferred%? initially deferred: initially immediate]]`
+[source,text]
+----
+alter table %TABLE%
+   add [constraint %CONSTNAME% ]foreign key (%FKEYCOLUMNS%)
+      references %PARENT%[ (%CKEYCOLUMNS%)]
+     [ on delete %DELCONST%][ on update %UPDCONST%][%Deferrable%? deferrable[%ForeignKeyConstraintDeferred%? initially deferred: initially immediate]]
+----
++
+改:
++
+[source,text]
+----
+alter table %TABLE%
+   add [constraint fk_%FKEYCOLUMNS%__from__%PARENT% ]foreign key (%FKEYCOLUMNS%)
+      references %PARENT%[ (%CKEYCOLUMNS%)]
+     [ on delete %DELCONST%][ on update %UPDCONST%][%Deferrable%? deferrable[%ForeignKeyConstraintDeferred%? initially deferred: initially immediate]]
+----
 
 [NOTE]
 ====
