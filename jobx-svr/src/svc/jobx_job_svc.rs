@@ -61,6 +61,7 @@ impl JobxJobSvc {
                 }
 
                 // 发布任务到 Redis Stream
+                let key = format!("{}:{}", stream_key, job.code);
                 let payload = match serde_json::to_string(&job) {
                     Ok(p) => p,
                     Err(e) => {
@@ -68,7 +69,7 @@ impl JobxJobSvc {
                         return;
                     }
                 };
-                match publish_to_stream(&stream_key, &[("payload", &payload)]).await {
+                match publish_to_stream(&key, &[("payload", &payload)]).await {
                     Ok(msg_id) => {
                         info!(
                             "发布任务到 Redis Stream: job_code={}, job_name={}, msg_id={}",

@@ -1,6 +1,6 @@
 /*==============================================================*/
 /* DBMS name:      PostgreSQL 9.x                               */
-/* Created on:     2026/9/15 10:02:12                           */
+/* Created on:     2026/9/15 16:10:57                           */
 /*==============================================================*/
 
 
@@ -38,7 +38,8 @@ comment on column jobx_job.id is
 'ID';
 
 comment on column jobx_job.code is
-'编码';
+'编码
+发布任务消息时的key将以计划编码结尾，对应的执行器订阅此key';
 
 comment on column jobx_job.name is
 '名称';

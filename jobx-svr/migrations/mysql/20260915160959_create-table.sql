@@ -1,6 +1,6 @@
 /*==============================================================*/
 /* DBMS name:      MySQL 5.0                                    */
-/* Created on:     2026/9/15 10:09:41                           */
+/* Created on:     2026/9/15 16:09:59                           */
 /*==============================================================*/
 
 
@@ -10,7 +10,8 @@
 create table jobx_job
 (
     id                   bigint not null  comment 'ID',
-    code                 varchar(50) not null  comment '编码',
+    code                 varchar(50) not null  comment '编码
+             发布任务消息时的key将以计划编码结尾，对应的执行器订阅此key',
     name                 varchar(50) not null  comment '名称',
     params               varchar(800)  comment '参数',
     job_type             tinyint not null  comment '计划类型

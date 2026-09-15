@@ -4,6 +4,7 @@ use robotech::macros::crud_dto;
 #[crud_dto]
 pub struct JobxJobDto {
     /// 编码
+    /// 发布任务消息时的key将以计划编码结尾，对应的执行器订阅此key
     pub code: String,
     /// 名称
     pub name: String,
