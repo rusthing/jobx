@@ -1,6 +1,6 @@
 /*==============================================================*/
 /* DBMS name:      PostgreSQL 9.x                               */
-/* Created on:     2026/9/11 16:50:04                           */
+/* Created on:     2026/9/15 10:02:12                           */
 /*==============================================================*/
 
 
@@ -117,7 +117,7 @@ create table jobx_task (
    updator_id           INT8                 not null,
    update_ts            INT8                 not null,
    constraint PK_JOBX_TASK primary key (id),
-   constraint AK_JOB_ID_AND_SCHEDUL_JOBX_TASK unique (job_id, assign_ts)
+   constraint AK_JOB_ID_AND_SCHEDULED_ASSIGN_TS unique (job_id, scheduled_assign_ts)
 );
 
 comment on table jobx_task is

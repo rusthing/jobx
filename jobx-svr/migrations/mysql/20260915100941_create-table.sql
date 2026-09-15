@@ -1,6 +1,6 @@
 /*==============================================================*/
 /* DBMS name:      MySQL 5.0                                    */
-/* Created on:     2026/9/11 16:49:19                           */
+/* Created on:     2026/9/15 10:09:41                           */
 /*==============================================================*/
 
 
@@ -64,7 +64,7 @@ create table jobx_task
     updator_id           bigint not null  comment '修改人的用户ID',
     update_ts            bigint not null  comment '修改时间戳',
     primary key (id),
-    unique key AK_job_id_and_scheduled_assign_ts (job_id, assign_ts)
+    unique key AK_job_id_and_scheduled_assign_ts (job_id, scheduled_assign_ts)
 );
 
 alter table jobx_task comment '任务记录';
