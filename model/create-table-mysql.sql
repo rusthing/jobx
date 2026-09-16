@@ -1,6 +1,6 @@
 /*==============================================================*/
 /* DBMS name:      MySQL 5.0                                    */
-/* Created on:     2026/9/15 16:09:59                           */
+/* Created on:     2026/9/16 14:57:20                           */
 /*==============================================================*/
 
 
@@ -10,8 +10,6 @@
 create table jobx_job
 (
    id                   bigint not null  comment 'ID',
-   code                 varchar(50) not null  comment '编码
-             发布任务消息时的key将以计划编码结尾，对应的执行器订阅此key',
    name                 varchar(50) not null  comment '名称',
    params               varchar(800)  comment '参数',
    job_type             tinyint not null  comment '计划类型
@@ -19,13 +17,15 @@ create table jobx_job
              1: cron表达式
              2: 固定延迟
              3: 固定频率',
-   high_freq            bit(1) not null default false  comment '是否高频任务',
+   high_freq            bit(1) default false  comment '是否高频任务',
    cron                 varchar(30)  comment 'cron表达式',
    interval_duration    varchar(10)  comment '固定间隔时间',
    valid_begin_ts       bigint  comment '有效开始时间戳',
    valid_end_ts         bigint  comment '有效结束时间戳',
+   executor_code        varchar(50) not null  comment '执行器编码
+             发布任务消息时的key将以此编码结尾，只有相同编码的执行器才订阅此key',
    pre_assign_duration  varchar(10)  comment '提前分派时间',
-   next_assign_ts       bigint not null  comment '下次分派时间戳',
+   next_assign_ts       bigint  comment '下次分派时间戳',
    remark               varchar(50)  comment '备注',
    enabled              bit(1) not null default true  comment '启用',
    creator_id           bigint not null  comment '创建人的用户ID',
@@ -33,7 +33,6 @@ create table jobx_job
    updator_id           bigint not null  comment '修改人的用户ID',
    update_ts            bigint not null  comment '修改时间戳',
    primary key (id),
-   unique key AK_code (code),
    unique key AK_name (name)
 );
 

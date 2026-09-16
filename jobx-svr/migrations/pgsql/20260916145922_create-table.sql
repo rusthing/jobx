@@ -1,6 +1,6 @@
 /*==============================================================*/
 /* DBMS name:      PostgreSQL 9.x                               */
-/* Created on:     2026/9/15 16:10:57                           */
+/* Created on:     2026/9/16 14:59:22                           */
 /*==============================================================*/
 
 
@@ -9,17 +9,17 @@
 /*==============================================================*/
 create table jobx_job (
                           id                   INT8                 not null,
-                          code                 VARCHAR(50)          not null,
                           name                 VARCHAR(50)          not null,
                           params               VARCHAR(800)         null,
                           job_type             INT2                 not null,
-                          high_freq            BOOL                 not null default false,
+                          high_freq            BOOL                 null default false,
                           cron                 VARCHAR(30)          null,
                           interval_duration    VARCHAR(10)          null,
                           valid_begin_ts       INT8                 null,
                           valid_end_ts         INT8                 null,
+                          executor_code        VARCHAR(50)          not null,
                           pre_assign_duration  VARCHAR(10)          null,
-                          next_assign_ts       INT8                 not null,
+                          next_assign_ts       INT8                 null,
                           remark               VARCHAR(50)          null,
                           enabled              BOOL                 not null default true,
                           creator_id           INT8                 not null,
@@ -27,7 +27,6 @@ create table jobx_job (
                           updator_id           INT8                 not null,
                           update_ts            INT8                 not null,
                           constraint PK_JOBX_JOB primary key (id),
-                          constraint AK_CODE_JOBX_JOB unique (code),
                           constraint AK_NAME_JOBX_JOB unique (name)
 );
 
@@ -36,10 +35,6 @@ comment on table jobx_job is
 
 comment on column jobx_job.id is
 'ID';
-
-comment on column jobx_job.code is
-'编码
-发布任务消息时的key将以计划编码结尾，对应的执行器订阅此key';
 
 comment on column jobx_job.name is
 '名称';
@@ -68,6 +63,10 @@ comment on column jobx_job.valid_begin_ts is
 
 comment on column jobx_job.valid_end_ts is
 '有效结束时间戳';
+
+comment on column jobx_job.executor_code is
+'执行器编码
+发布任务消息时的key将以此编码结尾，只有相同编码的执行器才订阅此key';
 
 comment on column jobx_job.pre_assign_duration is
 '提前分派时间';
