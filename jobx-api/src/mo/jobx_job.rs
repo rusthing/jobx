@@ -9,19 +9,18 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false, unique)]
     pub id: i64,
-    #[sea_orm(unique)]
-    pub code: String,
+    pub executor_code: String,
     #[sea_orm(unique)]
     pub name: String,
     pub params: Option<String>,
     pub job_type: i16,
-    pub high_freq: bool,
+    pub high_freq: Option<bool>,
     pub cron: Option<String>,
     pub interval_duration: Option<String>,
     pub valid_begin_ts: Option<i64>,
     pub valid_end_ts: Option<i64>,
     pub pre_assign_duration: Option<String>,
-    pub next_assign_ts: i64,
+    pub next_assign_ts: Option<i64>,
     pub remark: Option<String>,
     pub enabled: bool,
     pub creator_id: i64,

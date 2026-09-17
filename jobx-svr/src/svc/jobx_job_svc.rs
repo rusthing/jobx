@@ -168,8 +168,8 @@ impl JobxJobSvc {
             assign_lead_duration_default,
             high_freq_threshold_duration,
         )?;
-        add_dto.high_freq = high_freq;
-        add_dto.next_assign_ts = next_assign_ts;
+        add_dto.high_freq = Some(high_freq);
+        add_dto.next_assign_ts = Some(next_assign_ts);
 
         let active_model: ActiveModel = add_dto.into();
         let one = JobxJobVo::from(JobxJobDao::insert(active_model, db).await?);
@@ -238,8 +238,8 @@ impl JobxJobSvc {
                 assign_lead_duration_default,
                 high_freq_threshold_duration,
             )?;
-            modify_dto.high_freq = high_freq;
-            modify_dto.next_assign_ts = next_assign_ts;
+            modify_dto.high_freq = Some(high_freq);
+            modify_dto.next_assign_ts = Some(next_assign_ts);
         }
 
         let active_model: ActiveModel = modify_dto.into();
@@ -275,26 +275,26 @@ impl JobxJobSvc {
                 let task_add_dto = JobxTaskAddDto::builder()
                     .task_type(TaskType::Scheduled)
                     .job_id(Some(job.id.into()))
-                    .scheduled_assign_ts(Some(job.next_assign_ts.into()))
+                    .scheduled_assign_ts(job.next_assign_ts.map(|v| v.into()))
                     .assign_ts(now.into())
                     ._current_user_id(job.updator_id.into())
                     .build();
 
                 match JobxTaskSvc::add::<DatabaseTransaction>(task_add_dto, None).await {
                     Ok(_) => {
-                        info!("添加任务到数据库成功: job_code={}", job.code);
+                        info!("添加任务到数据库成功: job_code={}", job.executor_code);
                     }
                     Err(e) => {
-                        warn!("添加任务到数据库失败: job_code={}, error={:?}", job.code, e);
+                        warn!("添加任务到数据库失败: job_code={}, error={:?}", job.executor_code, e);
                         return;
                     }
                 }
 
-                let key = format!("{}:{}", stream_key, job.code);
+                let key = format!("{}:{}", stream_key, job.executor_code);
                 let payload = match serde_json::to_string(&job) {
                     Ok(p) => p,
                     Err(e) => {
-                        warn!("序列化任务失败: job_code={}, error={:?}", job.code, e);
+                        warn!("序列化任务失败: job_code={}, error={:?}", job.executor_code, e);
                         return;
                     }
                 };
@@ -302,13 +302,13 @@ impl JobxJobSvc {
                     Ok(msg_id) => {
                         info!(
                             "发布任务到 Redis Stream: job_code={}, job_name={}, msg_id={}",
-                            job.code, job.name, msg_id
+                            job.executor_code, job.name, msg_id
                         );
                     }
                     Err(e) => {
                         warn!(
                             "发布任务到 Redis Stream 失败: job_code={}, error={:?}",
-                            job.code, e
+                            job.executor_code, e
                         );
                     }
                 }
