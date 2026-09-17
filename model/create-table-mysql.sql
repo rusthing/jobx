@@ -1,6 +1,6 @@
 /*==============================================================*/
 /* DBMS name:      MySQL 5.0                                    */
-/* Created on:     2026/9/16 14:57:20                           */
+/* Created on:     2026/9/17 12:41:11                           */
 /*==============================================================*/
 
 
@@ -24,7 +24,7 @@ create table jobx_job
    valid_end_ts         bigint  comment '有效结束时间戳',
    executor_code        varchar(50) not null  comment '执行器编码
              发布任务消息时的key将以此编码结尾，只有相同编码的执行器才订阅此key',
-   pre_assign_duration  varchar(10)  comment '提前分派时间',
+   assign_lead_duration varchar(10)  comment '分派提前时间',
    next_assign_ts       bigint  comment '下次分派时间戳',
    remark               varchar(50)  comment '备注',
    enabled              bit(1) not null default true  comment '启用',
@@ -71,4 +71,6 @@ alter table jobx_task comment '任务记录';
 
 alter table jobx_task add constraint fk_job_id__from__jobx_job foreign key (job_id)
       references jobx_job (id) on delete restrict on update restrict;
+
+
 

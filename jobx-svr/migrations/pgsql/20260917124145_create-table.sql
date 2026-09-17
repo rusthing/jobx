@@ -1,6 +1,6 @@
 /*==============================================================*/
 /* DBMS name:      PostgreSQL 9.x                               */
-/* Created on:     2026/9/16 14:59:22                           */
+/* Created on:     2026/9/17 12:41:45                           */
 /*==============================================================*/
 
 
@@ -18,7 +18,7 @@ create table jobx_job (
                           valid_begin_ts       INT8                 null,
                           valid_end_ts         INT8                 null,
                           executor_code        VARCHAR(50)          not null,
-                          pre_assign_duration  VARCHAR(10)          null,
+                          assign_lead_duration VARCHAR(10)          null,
                           next_assign_ts       INT8                 null,
                           remark               VARCHAR(50)          null,
                           enabled              BOOL                 not null default true,
@@ -68,8 +68,8 @@ comment on column jobx_job.executor_code is
 '执行器编码
 发布任务消息时的key将以此编码结尾，只有相同编码的执行器才订阅此key';
 
-comment on column jobx_job.pre_assign_duration is
-'提前分派时间';
+comment on column jobx_job.assign_lead_duration is
+'分派提前时间';
 
 comment on column jobx_job.next_assign_ts is
 '下次分派时间戳';
@@ -187,4 +187,5 @@ alter table jobx_task
     add constraint fk_job_id__from__jobx_job foreign key (job_id)
         references jobx_job (id)
         on delete restrict on update restrict;
+
 

@@ -23,8 +23,8 @@ pub struct JobxJobDto {
     pub valid_begin_ts: Option<u64>,
     /// 有效结束时间戳
     pub valid_end_ts: Option<u64>,
-    /// 提前分派时间
-    pub pre_assign_duration: Option<Duration>,
+    /// 分派提前时间
+    pub assign_lead_duration: Option<Duration>,
     /// 下次分派时间戳
     pub next_assign_ts: Option<u64>,
     /// 备注

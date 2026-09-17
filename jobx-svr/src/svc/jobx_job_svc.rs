@@ -156,7 +156,7 @@ impl JobxJobSvc {
         let interval_duration = add_dto.interval_duration.clone();
         let valid_begin_ts = add_dto.valid_begin_ts.clone();
         let valid_end_ts = add_dto.valid_end_ts.clone();
-        let assign_lead_duration = add_dto.pre_assign_duration.clone();
+        let assign_lead_duration = add_dto.assign_lead_duration.clone();
 
         let (high_freq, next_assign_ts) = Self::calc_job_schedule(
             job_type,
@@ -203,7 +203,7 @@ impl JobxJobSvc {
             || modify_dto.interval_duration.is_some()
             || modify_dto.valid_begin_ts.is_some()
             || modify_dto.valid_end_ts.is_some()
-            || modify_dto.pre_assign_duration.is_some();
+            || modify_dto.assign_lead_duration.is_some();
         if has_schedule_change {
             // 先从 DTO 取出已设置的调度字段值（在 into() 消费 DTO 之前）
             // 注意：字符串字段需 clone 为自有值，避免借用冲突
@@ -212,7 +212,7 @@ impl JobxJobSvc {
             let interval_duration = modify_dto.interval_duration.clone();
             let valid_begin_ts = modify_dto.valid_begin_ts.clone();
             let valid_end_ts = modify_dto.valid_end_ts.clone();
-            let assign_lead_duration = modify_dto.pre_assign_duration.clone();
+            let assign_lead_duration = modify_dto.assign_lead_duration.clone();
 
             // 获取原记录以获取可能未在modify_dto中设置的字段
             let existing = JobxJobDao::get_by_id::<_, JobxJobVo>(id, db)
@@ -226,7 +226,7 @@ impl JobxJobSvc {
             let valid_begin_ts = valid_begin_ts.or(Some(existing.valid_begin_ts.clone()));
             let valid_end_ts = valid_end_ts.or(Some(existing.valid_end_ts.clone()));
             let assign_lead_duration =
-                assign_lead_duration.or(Some(existing.pre_assign_duration.clone()));
+                assign_lead_duration.or(Some(existing.assign_lead_duration.clone()));
 
             let (high_freq, next_assign_ts) = Self::calc_job_schedule(
                 job_type,

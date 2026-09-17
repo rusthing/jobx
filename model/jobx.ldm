@@ -1524,8 +1524,8 @@ Shadow=0</a:DisplayPreferences>
 <o:RelationshipSymbol Id="o6">
 <a:CreationDate>1788858211</a:CreationDate>
 <a:ModificationDate>1789436538</a:ModificationDate>
-<a:Rect>((-617,18639), (12864,21039))</a:Rect>
-<a:ListOfPoints>((-217,19839),(11464,19839))</a:ListOfPoints>
+<a:Rect>((-425,18639), (12864,21039))</a:Rect>
+<a:ListOfPoints>((-25,19839),(11464,19839))</a:ListOfPoints>
 <a:CornerStyle>1</a:CornerStyle>
 <a:ArrowStyle>4371</a:ArrowStyle>
 <a:LineColor>11881048</a:LineColor>
@@ -1547,7 +1547,7 @@ DESTINATION 0 新宋体,8,N</a:FontList>
 <a:CreationDate>1788853003</a:CreationDate>
 <a:ModificationDate>1789436533</a:ModificationDate>
 <a:IconMode>-1</a:IconMode>
-<a:Rect>((-28207,7962), (-217,26186))</a:Rect>
+<a:Rect>((-28399,7962), (-25,26186))</a:Rect>
 <a:LineColor>11881048</a:LineColor>
 <a:FillColor>16759472</a:FillColor>
 <a:ShadowColor>12632256</a:ShadowColor>
@@ -1764,11 +1764,11 @@ LABL 0 新宋体,8,N</a:FontList>
 </o:EntityAttribute>
 <o:EntityAttribute Id="o24">
 <a:ObjectID>66A747AE-88A6-4A8E-9E87-93B55925A505</a:ObjectID>
-<a:Name>提前分派时间</a:Name>
-<a:Code>pre_assign_duration</a:Code>
+<a:Name>分派提前时间</a:Name>
+<a:Code>assign_lead_duration</a:Code>
 <a:CreationDate>1789108069</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
-<a:ModificationDate>1789108461</a:ModificationDate>
+<a:ModificationDate>1789620038</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:DataType>VA10</a:DataType>
 <a:Length>10</a:Length>
@@ -2114,13 +2114,13 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:Code>jobx-pgsql</a:Code>
 <a:CreationDate>1788921306</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
-<a:ModificationDate>1789541927</a:ModificationDate>
+<a:ModificationDate>1789620097</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:GlobalObjectID/>
 <a:TargetModelURL>file:///%[PRJ_ROOT_DIR]%/jobx-pgsql.pdm</a:TargetModelURL>
 <a:TargetModelID>6166E339-7853-4808-AA49-60304892A29E</a:TargetModelID>
 <a:TargetModelClassID>CDE44E21-9669-11D1-9914-006097355D9B</a:TargetModelClassID>
-<a:TargetModelLastModificationDate>1789541927</a:TargetModelLastModificationDate>
+<a:TargetModelLastModificationDate>1789620097</a:TargetModelLastModificationDate>
 <c:SessionShortcuts>
 <o:Shortcut Ref="o3"/>
 </c:SessionShortcuts>
@@ -2131,13 +2131,13 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:Code>jobx-mysql</a:Code>
 <a:CreationDate>1788921611</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
-<a:ModificationDate>1789541731</a:ModificationDate>
+<a:ModificationDate>1789620063</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:GlobalObjectID/>
 <a:TargetModelURL>file:///%[PRJ_ROOT_DIR]%/jobx-mysql.pdm</a:TargetModelURL>
 <a:TargetModelID>E5BAAAC7-0117-4886-BCD7-BE5A54BF7090</a:TargetModelID>
 <a:TargetModelClassID>CDE44E21-9669-11D1-9914-006097355D9B</a:TargetModelClassID>
-<a:TargetModelLastModificationDate>1789541731</a:TargetModelLastModificationDate>
+<a:TargetModelLastModificationDate>1789620063</a:TargetModelLastModificationDate>
 <c:SessionShortcuts>
 <o:Shortcut Ref="o4"/>
 </c:SessionShortcuts>
