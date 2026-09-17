@@ -571,8 +571,8 @@ Shadow=0</a:DisplayPreferences>
 <c:Symbols>
 <o:DependencyLinkSymbol Id="o4">
 <a:ModificationDate>1788921624</a:ModificationDate>
-<a:Rect>((-2063,-6250), (2061,-247))</a:Rect>
-<a:ListOfPoints>((-1,-647),(-1,-5850))</a:ListOfPoints>
+<a:Rect>((-2063,-6248), (2061,-247))</a:Rect>
+<a:ListOfPoints>((-1,-647),(-1,-5848))</a:ListOfPoints>
 <a:CornerStyle>1</a:CornerStyle>
 <a:ArrowStyle>1</a:ArrowStyle>
 <a:LineColor>5518853</a:LineColor>
@@ -590,8 +590,8 @@ Shadow=0</a:DisplayPreferences>
 </o:DependencyLinkSymbol>
 <o:DependencyLinkSymbol Id="o8">
 <a:ModificationDate>1788921624</a:ModificationDate>
-<a:Rect>((-2064,-15159), (2060,952))</a:Rect>
-<a:ListOfPoints>((-2,552),(-2,-14759))</a:ListOfPoints>
+<a:Rect>((-2064,-15157), (2060,952))</a:Rect>
+<a:ListOfPoints>((-2,552),(-2,-14757))</a:ListOfPoints>
 <a:CornerStyle>1</a:CornerStyle>
 <a:ArrowStyle>1</a:ArrowStyle>
 <a:LineColor>5518853</a:LineColor>
@@ -621,7 +621,7 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:GradientFillMode>65</a:GradientFillMode>
 <a:CustomPictureType>4</a:CustomPictureType>
 <a:CustomTextMode>1</a:CustomTextMode>
-<a:CustomPictureID>F3614781-50D8-484E-A078-B71AC1DA5F42</a:CustomPictureID>
+<a:CustomPictureID>2CD87656-0955-40A2-B0EE-2AEC6AA5AA64</a:CustomPictureID>
 <a:GradientEndColor>16777215</a:GradientEndColor>
 <a:KeepAspect>1</a:KeepAspect>
 <c:Object>
@@ -632,7 +632,7 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:ModificationDate>1788921306</a:ModificationDate>
 <a:IconMode>2</a:IconMode>
 <a:EmptyAreaSize>(800, 800)</a:EmptyAreaSize>
-<a:Rect>((-1202,-8248), (1197,-5850))</a:Rect>
+<a:Rect>((-1202,-8246), (1197,-5848))</a:Rect>
 <a:LineColor>12034707</a:LineColor>
 <a:FillColor>16437422</a:FillColor>
 <a:ShadowColor>12632256</a:ShadowColor>
@@ -643,7 +643,7 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:GradientFillMode>65</a:GradientFillMode>
 <a:CustomPictureType>4</a:CustomPictureType>
 <a:CustomTextMode>1</a:CustomTextMode>
-<a:CustomPictureID>23DBD3DB-BF81-497A-8030-8055410E9C5A</a:CustomPictureID>
+<a:CustomPictureID>EE28A3F3-CCE3-4E5E-877B-A5A578A319A9</a:CustomPictureID>
 <a:GradientEndColor>16777215</a:GradientEndColor>
 <a:KeepAspect>1</a:KeepAspect>
 <c:Object>
@@ -654,7 +654,7 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:ModificationDate>1788921611</a:ModificationDate>
 <a:IconMode>2</a:IconMode>
 <a:EmptyAreaSize>(800, 800)</a:EmptyAreaSize>
-<a:Rect>((-1202,-15959), (1197,-13561))</a:Rect>
+<a:Rect>((-1202,-15957), (1197,-13559))</a:Rect>
 <a:LineColor>12034707</a:LineColor>
 <a:FillColor>16437422</a:FillColor>
 <a:ShadowColor>12632256</a:ShadowColor>
@@ -665,7 +665,7 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:GradientFillMode>65</a:GradientFillMode>
 <a:CustomPictureType>4</a:CustomPictureType>
 <a:CustomTextMode>1</a:CustomTextMode>
-<a:CustomPictureID>23DBD3DB-BF81-497A-8030-8055410E9C5A</a:CustomPictureID>
+<a:CustomPictureID>EE28A3F3-CCE3-4E5E-877B-A5A578A319A9</a:CustomPictureID>
 <a:GradientEndColor>16777215</a:GradientEndColor>
 <a:KeepAspect>1</a:KeepAspect>
 <c:Object>

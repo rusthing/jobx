@@ -29,9 +29,9 @@ create table jobx_job
    remark               varchar(50)  comment '备注',
    enabled              bit(1) not null default true  comment '启用',
    creator_id           bigint not null  comment '创建人的用户ID',
-   create_ts            bigint not null  comment '创建时间戳',
+   create_ms            bigint not null  comment '创建时间戳',
    updator_id           bigint not null  comment '修改人的用户ID',
-   update_ts            bigint not null  comment '修改时间戳',
+   update_ms            bigint not null  comment '修改时间戳',
    primary key (id),
    unique key AK_name (name)
 );
@@ -60,9 +60,9 @@ create table jobx_task
    exec_start_ts        bigint  comment '开始执行时间戳',
    exec_end_ts          bigint  comment '结束执行时间戳',
    creator_id           bigint not null  comment '创建人的用户ID',
-   create_ts            bigint not null  comment '创建时间戳',
+   create_ms            bigint not null  comment '创建时间戳',
    updator_id           bigint not null  comment '修改人的用户ID',
-   update_ts            bigint not null  comment '修改时间戳',
+   update_ms            bigint not null  comment '修改时间戳',
    primary key (id),
    unique key AK_job_id_and_scheduled_assign_ts (job_id, scheduled_assign_ts)
 );

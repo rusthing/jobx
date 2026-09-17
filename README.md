@@ -222,7 +222,7 @@ let client = get_jobx_api_client()?;
 | `result` | `Option<String>` | 执行结果 |
 | `remark` | `Option<String>` | 备注 |
 
-> 所有实体均包含 `creator_id`、`create_ts`、`updator_id`、`update_ts` 审计字段。
+> 所有实体均包含 `creator_id`、`create_ms`、`updator_id`、`update_ms` 审计字段。
 
 ## 配置热更新
 

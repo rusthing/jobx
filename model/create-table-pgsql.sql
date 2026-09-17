@@ -23,9 +23,9 @@ create table jobx_job (
    remark               VARCHAR(50)          null,
    enabled              BOOL                 not null default true,
    creator_id           INT8                 not null,
-   create_ts            INT8                 not null,
+   create_ms            INT8                 not null,
    updator_id           INT8                 not null,
-   update_ts            INT8                 not null,
+   update_ms            INT8                 not null,
    constraint PK_JOBX_JOB primary key (id),
    constraint AK_NAME_JOBX_JOB unique (name)
 );
@@ -83,13 +83,13 @@ comment on column jobx_job.enabled is
 comment on column jobx_job.creator_id is
 '创建人的用户ID';
 
-comment on column jobx_job.create_ts is
+comment on column jobx_job.create_ms is
 '创建时间戳';
 
 comment on column jobx_job.updator_id is
 '修改人的用户ID';
 
-comment on column jobx_job.update_ts is
+comment on column jobx_job.update_ms is
 '修改时间戳';
 
 /*==============================================================*/
@@ -113,9 +113,9 @@ create table jobx_task (
    exec_start_ts        INT8                 null,
    exec_end_ts          INT8                 null,
    creator_id           INT8                 not null,
-   create_ts            INT8                 not null,
+   create_ms            INT8                 not null,
    updator_id           INT8                 not null,
-   update_ts            INT8                 not null,
+   update_ms            INT8                 not null,
    constraint PK_JOBX_TASK primary key (id),
    constraint AK_JOB_ID_AND_SCHEDULED_ASSIGN_TS unique (job_id, scheduled_assign_ts)
 );
@@ -160,13 +160,13 @@ comment on column jobx_task.exec_end_ts is
 comment on column jobx_task.creator_id is
 '创建人的用户ID';
 
-comment on column jobx_task.create_ts is
+comment on column jobx_task.create_ms is
 '创建时间戳';
 
 comment on column jobx_task.updator_id is
 '修改人的用户ID';
 
-comment on column jobx_task.update_ts is
+comment on column jobx_task.update_ms is
 '修改时间戳';
 
 /*==============================================================*/
@@ -187,5 +187,3 @@ alter table jobx_task
    add constraint fk_job_id__from__jobx_job foreign key (job_id)
       references jobx_job (id)
       on delete restrict on update restrict;
-
-

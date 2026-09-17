@@ -20,9 +20,9 @@ pub struct Model {
     pub exec_start_ts: Option<i64>,
     pub exec_end_ts: Option<i64>,
     pub creator_id: i64,
-    pub create_ts: i64,
+    pub create_ms: i64,
     pub updator_id: i64,
-    pub update_ts: i64,
+    pub update_ms: i64,
     #[sea_orm(
         belongs_to,
         from = "job_id",
