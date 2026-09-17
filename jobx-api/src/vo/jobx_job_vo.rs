@@ -1,4 +1,5 @@
 use crate::dic::JobType;
+use robotech::api::Duration;
 use robotech::macros::vo;
 
 #[vo]
@@ -19,13 +20,13 @@ pub struct JobxJobVo {
     /// cron表达式
     pub cron: Option<String>,
     /// 固定间隔时间
-    pub interval_duration: Option<String>,
+    pub interval_duration: Option<Duration>,
     /// 有效开始时间戳
     pub valid_begin_ts: Option<u64>,
     /// 有效结束时间戳
     pub valid_end_ts: Option<u64>,
     /// 提前分派时间
-    pub pre_assign_duration: Option<String>,
+    pub pre_assign_duration: Option<Duration>,
     /// 下次分派时间戳
     pub next_assign_ts: u64,
     /// 备注

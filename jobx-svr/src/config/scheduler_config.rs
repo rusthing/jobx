@@ -75,6 +75,12 @@ pub struct SchedulerConfig {
     /// 查询结束时间比当前晚多少时间
     #[serde(default = "query_end_later_duration_default")]
     pub query_end_later_duration: Duration,
+    /// 分配任务提前多少时间
+    #[serde(with = "duration_serde", default = "assign_lead_duration_default")]
+    pub assign_lead_duration: Duration,
+    /// 高频任务时长阈值，当任务的执行间隔小于此阈值时，标记为高频任务
+    #[serde(with = "duration_serde", default = "high_freq_threshold_default")]
+    pub high_freq_threshold_duration: Duration,
 }
 
 fn build_ticker(period: Duration) -> tokio::time::Interval {
@@ -96,5 +102,13 @@ fn query_start_earlier_duration_default() -> Duration {
 }
 
 fn query_end_later_duration_default() -> Duration {
+    Duration::from_secs(60)
+}
+
+fn assign_lead_duration_default() -> Duration {
+    Duration::from_secs(60)
+}
+
+fn high_freq_threshold_default() -> Duration {
     Duration::from_secs(60)
 }
