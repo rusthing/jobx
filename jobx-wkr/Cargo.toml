@@ -1,0 +1,25 @@
+[package]
+name = "jobx-wkr"
+version = "0.1.0"
+edition = "2024"
+authors = ["zbz"]
+license = "MIT"
+keywords = ["job", "worker", "task", "executor"]
+description = "Task executor client library for JobX, providing simplified worker operations"
+categories = ["development-tools"]
+homepage = "https://github.com/rusthing/jobx"
+repository = "https://github.com/rusthing/jobx"
+readme = "README.md"
+
+[dependencies]
+anyhow = { workspace = true }
+tracing = { workspace = true }
+reqwest = { workspace = true, features = ["multipart", "json", "stream"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+chrono = { workspace = true }
+
+wheel-rs = { workspace = true }
+robotech = { workspace = true, features = ["feign", "macros"] }
+jobx-api = { workspace = true }
