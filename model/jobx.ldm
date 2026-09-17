@@ -1885,8 +1885,8 @@ LABL 0 新宋体,8,N</a:FontList>
 </o:Identifier>
 <o:Identifier Id="o34">
 <a:ObjectID>E365E2B2-AD42-42DD-AAE3-71AE905384A4</a:ObjectID>
-<a:Name>任务计划ID与预定分派时间戳</a:Name>
-<a:Code>job_id_and_scheduled_assign_ms</a:Code>
+<a:Name>任务计划ID与预定开始执行时间戳</a:Name>
+<a:Code>job_id_and_scheduled_exec_start_ms</a:Code>
 <a:CreationDate>1788940376</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789437629</a:ModificationDate>
@@ -1894,7 +1894,7 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:GlobalObjectID/>
 <c:Identifier.Attributes>
 <o:EntityAttribute Ref="o35"/>
-<o:EntityAttribute Ref="o36"/>
+<o:EntityAttribute Ref="o41"/>
 </c:Identifier.Attributes>
 </o:Identifier>
 </c:Identifiers>
@@ -1970,16 +1970,14 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:LogicalAttribute.Mandatory>1</a:LogicalAttribute.Mandatory>
 <a:GlobalObjectID/>
 </o:EntityAttribute>
-<o:EntityAttribute Id="o36">
-<a:ObjectID>9F179AF6-780C-40D0-BF53-7C215049614D</a:ObjectID>
-<a:Name>预定分派时间戳</a:Name>
-<a:Code>scheduled_assign_ms</a:Code>
+<o:EntityAttribute Id="o41">
+<a:ObjectID>F1E2D3C4-B5A6-4758-9C0D-1E2F3A4B5C6D</a:ObjectID>
+<a:Name>预定开始执行时间戳</a:Name>
+<a:Code>scheduled_exec_start_ms</a:Code>
 <a:CreationDate>1789093112</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789437629</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
-<a:Comment>预定分派时间戳
-为计划分派任务当时的下次分派时间戳</a:Comment>
 <a:DataType>LI</a:DataType>
 <a:GlobalObjectID/>
 </o:EntityAttribute>

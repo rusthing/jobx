@@ -108,8 +108,8 @@ create table jobx_task (
                            job_id               INT8                 null,
                            status               INT2                 not null default 0,
                            assign_ms            INT8                 not null,
-                           scheduled_assign_ms  INT8                 null,
-                           exec_detail          VARCHAR(800)         null,
+                          scheduled_exec_start_ms INT8             null,
+                          exec_detail          VARCHAR(800)         null,
                            exec_start_ms        INT8                 null,
                            exec_end_ms          INT8                 null,
                            creator_id           INT8                 not null,
@@ -117,7 +117,7 @@ create table jobx_task (
                            updator_id           INT8                 not null,
                            update_ms            INT8                 not null,
                            constraint PK_JOBX_TASK primary key (id),
-                           constraint AK_JOB_ID_AND_SCHEDULED_ASSIGN_MS unique (job_id, scheduled_assign_ms)
+                           constraint AK_JOB_ID_AND_SCHEDULED_EXEC_START_MS unique (job_id, scheduled_exec_start_ms)
 );
 
 comment on table jobx_task is
@@ -144,9 +144,8 @@ comment on column jobx_task.status is
 comment on column jobx_task.assign_ms is
 '分派时间戳';
 
-comment on column jobx_task.scheduled_assign_ms is
-'预定分派时间戳
-为计划分派任务当时的下次分派时间戳';
+comment on column jobx_task.scheduled_exec_start_ms is
+'预定开始执行时间戳';
 
 comment on column jobx_task.exec_detail is
 '执行详情';

@@ -54,8 +54,7 @@ create table jobx_task
              2: 失败
              ',
     assign_ms            bigint not null  comment '分派时间戳',
-    scheduled_assign_ms  bigint  comment '预定分派时间戳
-             为计划分派任务当时的下次分派时间戳',
+    scheduled_exec_start_ms bigint  comment '预定开始执行时间戳',
     exec_detail          varchar(800)  comment '执行详情',
     exec_start_ms        bigint  comment '开始执行时间戳',
     exec_end_ms          bigint  comment '结束执行时间戳',
@@ -64,7 +63,7 @@ create table jobx_task
     updator_id           bigint not null  comment '修改人的用户ID',
     update_ms            bigint not null  comment '修改时间戳',
     primary key (id),
-    unique key AK_job_id_and_scheduled_assign_ms (job_id, scheduled_assign_ms)
+    unique key AK_job_id_and_scheduled_exec_start_ms (job_id, scheduled_exec_start_ms)
 );
 
 alter table jobx_task comment '任务记录';

@@ -1,5 +1,6 @@
 use jobx_api::dic::JobType;
 use jobx_api::mo::jobx_task;
+use jobx_api::vo::JobxJobVo;
 use robotech::macros::dao;
 use sea_orm::sea_query::{BinOper, Expr, Query, SimpleExpr};
 use sea_orm::ColumnTrait;
@@ -19,12 +20,12 @@ use sea_orm::ExprTrait;
 pub struct JobxJobDao;
 
 impl JobxJobDao {
-    pub async fn find_publishable<C>(
+    pub async fn list_publishable<C>(
         begin: i64,
         end: i64,
         now: i64,
         db: &C,
-    ) -> Result<Vec<Model>, DaoError>
+    ) -> Result<Vec<JobxJobVo>, DaoError>
     where
         C: ConnectionTrait,
     {
@@ -37,7 +38,7 @@ impl JobxJobDao {
                 Expr::col(Column::Id),
             ))
             .and_where(Expr::binary(
-                Expr::col(jobx_task::Column::ScheduledAssignMs),
+                Expr::col(jobx_task::Column::ScheduledExecStartMs),
                 BinOper::Equal,
                 Expr::col(Column::NextAssignMs),
             ))
@@ -59,6 +60,7 @@ impl JobxJobDao {
                     .add(Column::ValidEndMs.gte(now)),
             )
             .filter(SimpleExpr::from(Expr::exists(not_exists).not()))
+            .into_model::<JobxJobVo>()
             .all(db)
             .await
             .map_err(|e| DaoError::parse_db_err(e))

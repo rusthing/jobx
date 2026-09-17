@@ -5005,21 +5005,6 @@ DAT 1788940664</a:History>
 <a:Column.Mandatory>1</a:Column.Mandatory>
 <a:GlobalObjectID/>
 </o:Column>
-<o:Column Id="o41">
-<a:ObjectID>5A03F73D-7C2D-43CF-8144-D2CD1A88A95A</a:ObjectID>
-<a:Name>预定分派时间戳</a:Name>
-<a:Code>scheduled_assign_ms</a:Code>
-<a:CreationDate>1789108512</a:CreationDate>
-<a:Creator>张柏子</a:Creator>
-<a:ModificationDate>1789109075</a:ModificationDate>
-<a:Modifier>张柏子</a:Modifier>
-<a:Comment>预定分派时间戳
-为计划分派任务当时的下次分派时间戳</a:Comment>
-<a:History>ORG {9F179AF6-780C-40D0-BF53-7C215049614D}
-DAT 1789108512</a:History>
-<a:DataType>bigint</a:DataType>
-<a:GlobalObjectID/>
-</o:Column>
 <o:Column Id="o42">
 <a:ObjectID>32E03577-D8CC-4831-A67E-061FF6B2F8A1</a:ObjectID>
 <a:Name>执行详情</a:Name>
@@ -5116,6 +5101,17 @@ DAT 1788921611</a:History>
 <a:Column.Mandatory>1</a:Column.Mandatory>
 <a:GlobalObjectID/>
 </o:Column>
+<o:Column Id="o49">
+<a:ObjectID>C3D4E5F6-A7B8-4950-C1D2-E3F4A5B6C7D8</a:ObjectID>
+<a:Name>预定开始执行时间戳</a:Name>
+<a:Code>scheduled_exec_start_ms</a:Code>
+<a:CreationDate>1789108512</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1789109075</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:DataType>bigint</a:DataType>
+<a:GlobalObjectID/>
+</o:Column>
 </c:Columns>
 <c:Keys>
 <o:Key Id="o49">
@@ -5135,8 +5131,8 @@ DAT 1788921611</a:History>
 </o:Key>
 <o:Key Id="o50">
 <a:ObjectID>C5DE0913-E6A2-4616-A9FB-C229A1D75244</a:ObjectID>
-<a:Name>任务计划ID与预定分派时间戳</a:Name>
-<a:Code>job_id_and_scheduled_assign_ms</a:Code>
+<a:Name>任务计划ID与预定开始执行时间戳</a:Name>
+<a:Code>job_id_and_scheduled_exec_start_ms</a:Code>
 <a:CreationDate>1788940663</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789437889</a:ModificationDate>

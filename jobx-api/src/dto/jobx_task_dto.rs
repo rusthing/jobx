@@ -12,8 +12,8 @@ pub struct JobxTaskDto {
     pub status: TaskStatus,
     /// 分派时间戳
     pub assign_ms: u64,
-    /// 预定分派时间戳
-    pub scheduled_assign_ms: Option<u64>,
+    /// 预定开始执行时间戳
+    pub scheduled_exec_start_ms: Option<u64>,
     /// 执行详情
     pub exec_detail: Option<String>,
     /// 开始执行时间戳

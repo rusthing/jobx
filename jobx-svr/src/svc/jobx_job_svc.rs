@@ -40,8 +40,8 @@ impl JobxJobSvc {
             .unwrap_or(assign_lead_duration_default);
 
         let has_range = valid_begin_ms.is_some() || valid_end_ms.is_some();
-        let mut begin_ts = valid_begin_ms.unwrap_or(U64(0));
-        let end_ts = valid_end_ms.unwrap_or(U64::max());
+        let mut valid_begin_ms = valid_begin_ms.unwrap_or(U64(0));
+        let valid_end_ms = valid_end_ms.unwrap_or(U64::max());
 
         match job_type {
             JobType::Manual => Ok((None, None)),
@@ -56,11 +56,11 @@ impl JobxJobSvc {
 
                 // 当前时间在有效开始时间内，从当前时间开始查找，否则从有效开始时间起查找
                 let mut upcoming = if has_range {
-                    if now_ms > begin_ts && now_ms < end_ts {
-                        begin_ts = now_ms;
+                    if now_ms > valid_begin_ms && now_ms < valid_end_ms {
+                        valid_begin_ms = now_ms;
                     }
                     let begin_dt = Utc
-                        .timestamp_millis_opt(begin_ts.into())
+                        .timestamp_millis_opt(valid_begin_ms.into())
                         .single()
                         .ok_or_else(|| validator::ValidationError::new("有效开始时间戳无效"))?;
                     schedule.after(&begin_dt)
@@ -76,10 +76,10 @@ impl JobxJobSvc {
                     })
                 })?;
 
-                let first_exec_ts: U64 = first.timestamp_millis().into();
+                let first_exec_ms: U64 = first.timestamp_millis().into();
 
                 // 检查第一次执行是否超出有效结束时间
-                if first_exec_ts > end_ts {
+                if first_exec_ms > valid_end_ms {
                     Err(validator::ValidationError::new(
                         "cron表达式在有效时间范围内无下一次执行时间",
                     ))?;
@@ -87,15 +87,15 @@ impl JobxJobSvc {
 
                 // 检查是否为高频率任务
                 let high_freq = match upcoming.next() {
-                    Some(second) if U64(second.timestamp_millis() as u64) <= end_ts => {
-                        let interval: u64 = (second.timestamp_millis() - first_exec_ts).into();
+                    Some(second) if U64(second.timestamp_millis() as u64) <= valid_end_ms => {
+                        let interval: u64 = (second.timestamp_millis() - first_exec_ms).into();
                         interval < high_freq_threshold_ms as u64
                     }
                     _ => false,
                 };
 
                 // 计算下一次分配时间戳
-                let next_assign_ms: u64 = (first_exec_ts - assign_lead_duration.as_millis()).into();
+                let next_assign_ms: u64 = (first_exec_ms - assign_lead_duration.as_millis()).into();
 
                 Ok((Some(high_freq), Some(next_assign_ms.into())))
             }
@@ -106,16 +106,20 @@ impl JobxJobSvc {
                 })?;
 
                 // 计算第一次执行时间
-                let first_exec_ts = if has_range {
+                let first_exec_ms = if has_range {
                     // 如果当前时间已超出有效结束时间，则设为 0
-                    if now_ms > end_ts {
+                    if now_ms > valid_end_ms {
                         Err(validator::ValidationError::new(
                             "在有效时间范围内无下一次执行时间",
                         ))?;
                     }
                     // 如果开始时间大于当前时间，则第一次执行时间为开始时间
                     // 否则，第一次执行时间为当前时间
-                    if now_ms < begin_ts { begin_ts } else { now_ms }
+                    if now_ms < valid_begin_ms {
+                        valid_begin_ms
+                    } else {
+                        now_ms
+                    }
                 } else {
                     now_ms
                 };
@@ -125,7 +129,7 @@ impl JobxJobSvc {
                 let high_freq = interval_ms < high_freq_threshold_ms;
 
                 // 计算下一次分配时间戳
-                let next_assign_ms: u64 = (first_exec_ts - assign_lead_duration.as_millis()).into();
+                let next_assign_ms: u64 = (first_exec_ms - assign_lead_duration.as_millis()).into();
 
                 Ok((Some(high_freq), Some(next_assign_ms.into())))
             }
@@ -260,7 +264,7 @@ impl JobxJobSvc {
         let begin = now - config.query_start_earlier_duration.as_millis() as i64;
         let end = now + config.query_end_later_duration.as_millis() as i64;
 
-        let jobs = JobxJobDao::find_publishable(begin, end, now, db).await?;
+        let jobs = JobxJobDao::list_publishable(begin, end, now, db).await?;
 
         if jobs.is_empty() {
             return Ok(());
@@ -270,13 +274,17 @@ impl JobxJobSvc {
             let job = job.clone();
             let stream_key = config.stream_key.clone();
             tokio::spawn(async move {
-                let now = now_ms();
-
                 let task_add_dto = JobxTaskAddDto::builder()
                     .task_type(TaskType::Scheduled)
                     .job_id(Some(job.id.into()))
-                    .scheduled_assign_ms(job.next_assign_ms.map(|v| v.into()))
-                    .assign_ms(now.into())
+                    .scheduled_exec_start_ms(
+                        job.next_assign_ms
+                            .zip(job.assign_lead_duration.as_ref())
+                            .map(|(next_ms, lead)| {
+                                U64::from(u64::from(next_ms) + lead.as_millis() as u64)
+                            }),
+                    )
+                    .assign_ms(now_ms().into())
                     ._current_user_id(job.updator_id.into())
                     .build();
 
@@ -285,7 +293,10 @@ impl JobxJobSvc {
                         info!("添加任务到数据库成功: job_code={}", job.executor_code);
                     }
                     Err(e) => {
-                        warn!("添加任务到数据库失败: job_code={}, error={:?}", job.executor_code, e);
+                        warn!(
+                            "添加任务到数据库失败: job_code={}, error={:?}",
+                            job.executor_code, e
+                        );
                         return;
                     }
                 }
@@ -294,7 +305,10 @@ impl JobxJobSvc {
                 let payload = match serde_json::to_string(&job) {
                     Ok(p) => p,
                     Err(e) => {
-                        warn!("序列化任务失败: job_code={}, error={:?}", job.executor_code, e);
+                        warn!(
+                            "序列化任务失败: job_code={}, error={:?}",
+                            job.executor_code, e
+                        );
                         return;
                     }
                 };
