@@ -10,15 +10,15 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false, unique)]
     pub id: i64,
     pub task_type: i16,
-    #[sea_orm(unique_key = "ak_job_id_and_scheduled_assign_ts")]
+    #[sea_orm(unique_key = "ak_job_id_and_scheduled_assign_ms")]
     pub job_id: Option<i64>,
     pub status: i16,
-    #[sea_orm(unique_key = "ak_job_id_and_scheduled_assign_ts")]
-    pub assign_ts: i64,
-    pub scheduled_assign_ts: Option<i64>,
+    #[sea_orm(unique_key = "ak_job_id_and_scheduled_assign_ms")]
+    pub assign_ms: i64,
+    pub scheduled_assign_ms: Option<i64>,
     pub exec_detail: Option<String>,
-    pub exec_start_ts: Option<i64>,
-    pub exec_end_ts: Option<i64>,
+    pub exec_start_ms: Option<i64>,
+    pub exec_end_ms: Option<i64>,
     pub creator_id: i64,
     pub create_ms: i64,
     pub updator_id: i64,

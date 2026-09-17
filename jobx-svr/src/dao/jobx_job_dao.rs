@@ -37,26 +37,26 @@ impl JobxJobDao {
                 Expr::col(Column::Id),
             ))
             .and_where(Expr::binary(
-                Expr::col(jobx_task::Column::ScheduledAssignTs),
+                Expr::col(jobx_task::Column::ScheduledAssignMs),
                 BinOper::Equal,
-                Expr::col(Column::NextAssignTs),
+                Expr::col(Column::NextAssignMs),
             ))
             .to_owned();
 
         Entity::find()
             .filter(Column::Enabled.eq(true))
             .filter(Column::JobType.ne(JobType::Manual.value()))
-            .filter(Column::NextAssignTs.gte(begin))
-            .filter(Column::NextAssignTs.lte(end))
+            .filter(Column::NextAssignMs.gte(begin))
+            .filter(Column::NextAssignMs.lte(end))
             .filter(
                 Condition::any()
-                    .add(Column::ValidBeginTs.is_null())
-                    .add(Column::ValidBeginTs.lte(now)),
+                    .add(Column::ValidBeginMs.is_null())
+                    .add(Column::ValidBeginMs.lte(now)),
             )
             .filter(
                 Condition::any()
-                    .add(Column::ValidEndTs.is_null())
-                    .add(Column::ValidEndTs.gte(now)),
+                    .add(Column::ValidEndMs.is_null())
+                    .add(Column::ValidEndMs.gte(now)),
             )
             .filter(SimpleExpr::from(Expr::exists(not_exists).not()))
             .all(db)

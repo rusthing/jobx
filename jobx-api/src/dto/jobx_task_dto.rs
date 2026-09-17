@@ -11,13 +11,13 @@ pub struct JobxTaskDto {
     #[db_default]
     pub status: TaskStatus,
     /// 分派时间戳
-    pub assign_ts: u64,
+    pub assign_ms: u64,
     /// 预定分派时间戳
-    pub scheduled_assign_ts: Option<u64>,
+    pub scheduled_assign_ms: Option<u64>,
     /// 执行详情
     pub exec_detail: Option<String>,
     /// 开始执行时间戳
-    pub exec_start_ts: Option<u64>,
+    pub exec_start_ms: Option<u64>,
     /// 结束执行时间戳
-    pub exec_end_ts: Option<u64>,
+    pub exec_end_ms: Option<u64>,
 }

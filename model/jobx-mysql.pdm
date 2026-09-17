@@ -4659,7 +4659,7 @@ DAT 1788921611</a:History>
 <o:Column Id="o19">
 <a:ObjectID>04117D04-FFC7-4B2F-AD6D-CF4C85B983F9</a:ObjectID>
 <a:Name>有效开始时间戳</a:Name>
-<a:Code>valid_begin_ts</a:Code>
+<a:Code>valid_begin_ms</a:Code>
 <a:CreationDate>1788921611</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1788921611</a:ModificationDate>
@@ -4672,7 +4672,7 @@ DAT 1788921611</a:History>
 <o:Column Id="o20">
 <a:ObjectID>AB2DFFA1-370D-43B8-9CDB-CB7E29D7DFEF</a:ObjectID>
 <a:Name>有效结束时间戳</a:Name>
-<a:Code>valid_end_ts</a:Code>
+<a:Code>valid_end_ms</a:Code>
 <a:CreationDate>1788921611</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1788921611</a:ModificationDate>
@@ -4716,7 +4716,7 @@ DAT 1789108512</a:History>
 <o:Column Id="o23">
 <a:ObjectID>7D8BEE97-DC59-4573-97E7-A1FF51AB5A35</a:ObjectID>
 <a:Name>下次分派时间戳</a:Name>
-<a:Code>next_assign_ts</a:Code>
+<a:Code>next_assign_ms</a:Code>
 <a:CreationDate>1788921611</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789541273</a:ModificationDate>
@@ -4994,7 +4994,7 @@ DAT 1788921611</a:History>
 <o:Column Id="o40">
 <a:ObjectID>445183DE-A40F-49C8-A5CD-3484082133E8</a:ObjectID>
 <a:Name>分派时间戳</a:Name>
-<a:Code>assign_ts</a:Code>
+<a:Code>assign_ms</a:Code>
 <a:CreationDate>1788940663</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789108517</a:ModificationDate>
@@ -5008,7 +5008,7 @@ DAT 1788940664</a:History>
 <o:Column Id="o41">
 <a:ObjectID>5A03F73D-7C2D-43CF-8144-D2CD1A88A95A</a:ObjectID>
 <a:Name>预定分派时间戳</a:Name>
-<a:Code>scheduled_assign_ts</a:Code>
+<a:Code>scheduled_assign_ms</a:Code>
 <a:CreationDate>1789108512</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789109075</a:ModificationDate>
@@ -5037,7 +5037,7 @@ DAT 1789108512</a:History>
 <o:Column Id="o43">
 <a:ObjectID>1CB8FB30-F610-4604-AC8A-251C53D0371B</a:ObjectID>
 <a:Name>开始执行时间戳</a:Name>
-<a:Code>exec_start_ts</a:Code>
+<a:Code>exec_start_ms</a:Code>
 <a:CreationDate>1788921611</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789108517</a:ModificationDate>
@@ -5050,7 +5050,7 @@ DAT 1788921611</a:History>
 <o:Column Id="o44">
 <a:ObjectID>34C0B306-6DE2-4882-AA7E-30BF770E80D9</a:ObjectID>
 <a:Name>结束执行时间戳</a:Name>
-<a:Code>exec_end_ts</a:Code>
+<a:Code>exec_end_ms</a:Code>
 <a:CreationDate>1788921611</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789108517</a:ModificationDate>
@@ -5136,7 +5136,7 @@ DAT 1788921611</a:History>
 <o:Key Id="o50">
 <a:ObjectID>C5DE0913-E6A2-4616-A9FB-C229A1D75244</a:ObjectID>
 <a:Name>任务计划ID与预定分派时间戳</a:Name>
-<a:Code>job_id_and_scheduled_assign_ts</a:Code>
+<a:Code>job_id_and_scheduled_assign_ms</a:Code>
 <a:CreationDate>1788940663</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789437889</a:ModificationDate>

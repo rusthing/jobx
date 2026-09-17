@@ -21,8 +21,8 @@ impl JobxJobSvc {
         job_type: JobType,
         cron: Option<Option<String>>,
         interval_duration: Option<Option<api::Duration>>,
-        valid_begin_ts: Option<Option<U64>>,
-        valid_end_ts: Option<Option<U64>>,
+        valid_begin_ms: Option<Option<U64>>,
+        valid_end_ms: Option<Option<U64>>,
         assign_lead_duration: Option<Option<api::Duration>>,
         assign_lead_duration_default: Duration,
         high_freq_threshold_duration: Duration,
@@ -32,16 +32,16 @@ impl JobxJobSvc {
 
         let cron = cron.flatten();
         let interval_duration = interval_duration.flatten();
-        let valid_begin_ts = valid_begin_ts.flatten();
-        let valid_end_ts = valid_end_ts.flatten();
+        let valid_begin_ms = valid_begin_ms.flatten();
+        let valid_end_ms = valid_end_ms.flatten();
         let assign_lead_duration = assign_lead_duration
             .flatten()
             .map(|d| d.into())
             .unwrap_or(assign_lead_duration_default);
 
-        let has_range = valid_begin_ts.is_some() || valid_end_ts.is_some();
-        let mut begin_ts = valid_begin_ts.unwrap_or(U64(0));
-        let end_ts = valid_end_ts.unwrap_or(U64::max());
+        let has_range = valid_begin_ms.is_some() || valid_end_ms.is_some();
+        let mut begin_ts = valid_begin_ms.unwrap_or(U64(0));
+        let end_ts = valid_end_ms.unwrap_or(U64::max());
 
         match job_type {
             JobType::Manual => Ok((None, None)),
@@ -95,9 +95,9 @@ impl JobxJobSvc {
                 };
 
                 // 计算下一次分配时间戳
-                let next_assign_ts: u64 = (first_exec_ts - assign_lead_duration.as_millis()).into();
+                let next_assign_ms: u64 = (first_exec_ts - assign_lead_duration.as_millis()).into();
 
-                Ok((Some(high_freq), Some(next_assign_ts.into())))
+                Ok((Some(high_freq), Some(next_assign_ms.into())))
             }
 
             JobType::FixedDelay | JobType::FixedRate => {
@@ -125,9 +125,9 @@ impl JobxJobSvc {
                 let high_freq = interval_ms < high_freq_threshold_ms;
 
                 // 计算下一次分配时间戳
-                let next_assign_ts: u64 = (first_exec_ts - assign_lead_duration.as_millis()).into();
+                let next_assign_ms: u64 = (first_exec_ts - assign_lead_duration.as_millis()).into();
 
-                Ok((Some(high_freq), Some(next_assign_ts.into())))
+                Ok((Some(high_freq), Some(next_assign_ms.into())))
             }
         }
     }
@@ -154,22 +154,22 @@ impl JobxJobSvc {
             .ok_or_else(|| validator::ValidationError::new("job_type不能为空"))?;
         let cron = add_dto.cron.clone();
         let interval_duration = add_dto.interval_duration.clone();
-        let valid_begin_ts = add_dto.valid_begin_ts.clone();
-        let valid_end_ts = add_dto.valid_end_ts.clone();
+        let valid_begin_ms = add_dto.valid_begin_ms.clone();
+        let valid_end_ms = add_dto.valid_end_ms.clone();
         let assign_lead_duration = add_dto.assign_lead_duration.clone();
 
-        let (high_freq, next_assign_ts) = Self::calc_job_schedule(
+        let (high_freq, next_assign_ms) = Self::calc_job_schedule(
             job_type,
             cron,
             interval_duration,
-            valid_begin_ts,
-            valid_end_ts,
+            valid_begin_ms,
+            valid_end_ms,
             assign_lead_duration,
             assign_lead_duration_default,
             high_freq_threshold_duration,
         )?;
         add_dto.high_freq = Some(high_freq);
-        add_dto.next_assign_ts = Some(next_assign_ts);
+        add_dto.next_assign_ms = Some(next_assign_ms);
 
         let active_model: ActiveModel = add_dto.into();
         let one = JobxJobVo::from(JobxJobDao::insert(active_model, db).await?);
@@ -201,8 +201,8 @@ impl JobxJobSvc {
         let has_schedule_change = modify_dto.job_type.is_some()
             || modify_dto.cron.is_some()
             || modify_dto.interval_duration.is_some()
-            || modify_dto.valid_begin_ts.is_some()
-            || modify_dto.valid_end_ts.is_some()
+            || modify_dto.valid_begin_ms.is_some()
+            || modify_dto.valid_end_ms.is_some()
             || modify_dto.assign_lead_duration.is_some();
         if has_schedule_change {
             // 先从 DTO 取出已设置的调度字段值（在 into() 消费 DTO 之前）
@@ -210,8 +210,8 @@ impl JobxJobSvc {
             let job_type = modify_dto.job_type;
             let cron = modify_dto.cron.clone();
             let interval_duration = modify_dto.interval_duration.clone();
-            let valid_begin_ts = modify_dto.valid_begin_ts.clone();
-            let valid_end_ts = modify_dto.valid_end_ts.clone();
+            let valid_begin_ms = modify_dto.valid_begin_ms.clone();
+            let valid_end_ms = modify_dto.valid_end_ms.clone();
             let assign_lead_duration = modify_dto.assign_lead_duration.clone();
 
             // 获取原记录以获取可能未在modify_dto中设置的字段
@@ -223,23 +223,23 @@ impl JobxJobSvc {
             let job_type = job_type.unwrap_or(existing.job_type);
             let cron = cron.or(Some(existing.cron.clone()));
             let interval_duration = interval_duration.or(Some(existing.interval_duration.clone()));
-            let valid_begin_ts = valid_begin_ts.or(Some(existing.valid_begin_ts.clone()));
-            let valid_end_ts = valid_end_ts.or(Some(existing.valid_end_ts.clone()));
+            let valid_begin_ms = valid_begin_ms.or(Some(existing.valid_begin_ms.clone()));
+            let valid_end_ms = valid_end_ms.or(Some(existing.valid_end_ms.clone()));
             let assign_lead_duration =
                 assign_lead_duration.or(Some(existing.assign_lead_duration.clone()));
 
-            let (high_freq, next_assign_ts) = Self::calc_job_schedule(
+            let (high_freq, next_assign_ms) = Self::calc_job_schedule(
                 job_type,
                 cron,
                 interval_duration,
-                valid_begin_ts,
-                valid_end_ts,
+                valid_begin_ms,
+                valid_end_ms,
                 assign_lead_duration,
                 assign_lead_duration_default,
                 high_freq_threshold_duration,
             )?;
             modify_dto.high_freq = Some(high_freq);
-            modify_dto.next_assign_ts = Some(next_assign_ts);
+            modify_dto.next_assign_ms = Some(next_assign_ms);
         }
 
         let active_model: ActiveModel = modify_dto.into();
@@ -275,8 +275,8 @@ impl JobxJobSvc {
                 let task_add_dto = JobxTaskAddDto::builder()
                     .task_type(TaskType::Scheduled)
                     .job_id(Some(job.id.into()))
-                    .scheduled_assign_ts(job.next_assign_ts.map(|v| v.into()))
-                    .assign_ts(now.into())
+                    .scheduled_assign_ms(job.next_assign_ms.map(|v| v.into()))
+                    .assign_ms(now.into())
                     ._current_user_id(job.updator_id.into())
                     .build();
 

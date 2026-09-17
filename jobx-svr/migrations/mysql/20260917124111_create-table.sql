@@ -20,12 +20,12 @@ create table jobx_job
     high_freq            bit(1) default false  comment '是否高频任务',
     cron                 varchar(30)  comment 'cron表达式',
     interval_duration    varchar(10)  comment '固定间隔时间',
-    valid_begin_ts       bigint  comment '有效开始时间戳',
-    valid_end_ts         bigint  comment '有效结束时间戳',
+    valid_begin_ms       bigint  comment '有效开始时间戳',
+    valid_end_ms         bigint  comment '有效结束时间戳',
     executor_code        varchar(50) not null  comment '执行器编码
              发布任务消息时的key将以此编码结尾，只有相同编码的执行器才订阅此key',
     assign_lead_duration varchar(10)  comment '分派提前时间',
-    next_assign_ts       bigint  comment '下次分派时间戳',
+    next_assign_ms       bigint  comment '下次分派时间戳',
     remark               varchar(50)  comment '备注',
     enabled              bit(1) not null default true  comment '启用',
     creator_id           bigint not null  comment '创建人的用户ID',
@@ -53,18 +53,18 @@ create table jobx_task
              1: 成功
              2: 失败
              ',
-    assign_ts            bigint not null  comment '分派时间戳',
-    scheduled_assign_ts  bigint  comment '预定分派时间戳
+    assign_ms            bigint not null  comment '分派时间戳',
+    scheduled_assign_ms  bigint  comment '预定分派时间戳
              为计划分派任务当时的下次分派时间戳',
     exec_detail          varchar(800)  comment '执行详情',
-    exec_start_ts        bigint  comment '开始执行时间戳',
-    exec_end_ts          bigint  comment '结束执行时间戳',
+    exec_start_ms        bigint  comment '开始执行时间戳',
+    exec_end_ms          bigint  comment '结束执行时间戳',
     creator_id           bigint not null  comment '创建人的用户ID',
     create_ms            bigint not null  comment '创建时间戳',
     updator_id           bigint not null  comment '修改人的用户ID',
     update_ms            bigint not null  comment '修改时间戳',
     primary key (id),
-    unique key AK_job_id_and_scheduled_assign_ts (job_id, scheduled_assign_ts)
+    unique key AK_job_id_and_scheduled_assign_ms (job_id, scheduled_assign_ms)
 );
 
 alter table jobx_task comment '任务记录';

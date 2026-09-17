@@ -20,13 +20,13 @@ pub struct JobxJobDto {
     /// 固定间隔时间
     pub interval_duration: Option<Duration>,
     /// 有效开始时间戳
-    pub valid_begin_ts: Option<u64>,
+    pub valid_begin_ms: Option<u64>,
     /// 有效结束时间戳
-    pub valid_end_ts: Option<u64>,
+    pub valid_end_ms: Option<u64>,
     /// 分派提前时间
     pub assign_lead_duration: Option<Duration>,
     /// 下次分派时间戳
-    pub next_assign_ts: Option<u64>,
+    pub next_assign_ms: Option<u64>,
     /// 备注
     pub remark: Option<String>,
     /// 启用

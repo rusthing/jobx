@@ -15,11 +15,11 @@ create table jobx_job (
                           high_freq            BOOL                 null default false,
                           cron                 VARCHAR(30)          null,
                           interval_duration    VARCHAR(10)          null,
-                          valid_begin_ts       INT8                 null,
-                          valid_end_ts         INT8                 null,
+                          valid_begin_ms       INT8                 null,
+                          valid_end_ms         INT8                 null,
                           executor_code        VARCHAR(50)          not null,
                           assign_lead_duration VARCHAR(10)          null,
-                          next_assign_ts       INT8                 null,
+                          next_assign_ms       INT8                 null,
                           remark               VARCHAR(50)          null,
                           enabled              BOOL                 not null default true,
                           creator_id           INT8                 not null,
@@ -58,10 +58,10 @@ comment on column jobx_job.cron is
 comment on column jobx_job.interval_duration is
 '固定间隔时间';
 
-comment on column jobx_job.valid_begin_ts is
+comment on column jobx_job.valid_begin_ms is
 '有效开始时间戳';
 
-comment on column jobx_job.valid_end_ts is
+comment on column jobx_job.valid_end_ms is
 '有效结束时间戳';
 
 comment on column jobx_job.executor_code is
@@ -71,7 +71,7 @@ comment on column jobx_job.executor_code is
 comment on column jobx_job.assign_lead_duration is
 '分派提前时间';
 
-comment on column jobx_job.next_assign_ts is
+comment on column jobx_job.next_assign_ms is
 '下次分派时间戳';
 
 comment on column jobx_job.remark is
@@ -107,17 +107,17 @@ create table jobx_task (
                            task_type            INT2                 not null,
                            job_id               INT8                 null,
                            status               INT2                 not null default 0,
-                           assign_ts            INT8                 not null,
-                           scheduled_assign_ts  INT8                 null,
+                           assign_ms            INT8                 not null,
+                           scheduled_assign_ms  INT8                 null,
                            exec_detail          VARCHAR(800)         null,
-                           exec_start_ts        INT8                 null,
-                           exec_end_ts          INT8                 null,
+                           exec_start_ms        INT8                 null,
+                           exec_end_ms          INT8                 null,
                            creator_id           INT8                 not null,
                            create_ms            INT8                 not null,
                            updator_id           INT8                 not null,
                            update_ms            INT8                 not null,
                            constraint PK_JOBX_TASK primary key (id),
-                           constraint AK_JOB_ID_AND_SCHEDULED_ASSIGN_TS unique (job_id, scheduled_assign_ts)
+                           constraint AK_JOB_ID_AND_SCHEDULED_ASSIGN_MS unique (job_id, scheduled_assign_ms)
 );
 
 comment on table jobx_task is
@@ -141,20 +141,20 @@ comment on column jobx_task.status is
 2: 失败
 ';
 
-comment on column jobx_task.assign_ts is
+comment on column jobx_task.assign_ms is
 '分派时间戳';
 
-comment on column jobx_task.scheduled_assign_ts is
+comment on column jobx_task.scheduled_assign_ms is
 '预定分派时间戳
 为计划分派任务当时的下次分派时间戳';
 
 comment on column jobx_task.exec_detail is
 '执行详情';
 
-comment on column jobx_task.exec_start_ts is
+comment on column jobx_task.exec_start_ms is
 '开始执行时间戳';
 
-comment on column jobx_task.exec_end_ts is
+comment on column jobx_task.exec_end_ms is
 '结束执行时间戳';
 
 comment on column jobx_task.creator_id is

@@ -1728,7 +1728,7 @@ LABL 0 新宋体,8,N</a:FontList>
 <o:EntityAttribute Id="o21">
 <a:ObjectID>05B8E34A-0C6C-413F-968A-B9D7020E0FA8</a:ObjectID>
 <a:Name>有效开始时间戳</a:Name>
-<a:Code>valid_begin_ts</a:Code>
+<a:Code>valid_begin_ms</a:Code>
 <a:CreationDate>1788857112</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1788857530</a:ModificationDate>
@@ -1739,7 +1739,7 @@ LABL 0 新宋体,8,N</a:FontList>
 <o:EntityAttribute Id="o22">
 <a:ObjectID>85256DA9-343F-435C-9BC3-8EDD8E9ECBB8</a:ObjectID>
 <a:Name>有效结束时间戳</a:Name>
-<a:Code>valid_end_ts</a:Code>
+<a:Code>valid_end_ms</a:Code>
 <a:CreationDate>1788857112</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1788857530</a:ModificationDate>
@@ -1777,7 +1777,7 @@ LABL 0 新宋体,8,N</a:FontList>
 <o:EntityAttribute Id="o25">
 <a:ObjectID>E2B377AC-6763-495D-9099-1C8ECF00FF24</a:ObjectID>
 <a:Name>下次分派时间戳</a:Name>
-<a:Code>next_assign_ts</a:Code>
+<a:Code>next_assign_ms</a:Code>
 <a:CreationDate>1788857269</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789539291</a:ModificationDate>
@@ -1886,7 +1886,7 @@ LABL 0 新宋体,8,N</a:FontList>
 <o:Identifier Id="o34">
 <a:ObjectID>E365E2B2-AD42-42DD-AAE3-71AE905384A4</a:ObjectID>
 <a:Name>任务计划ID与预定分派时间戳</a:Name>
-<a:Code>job_id_and_scheduled_assign_ts</a:Code>
+<a:Code>job_id_and_scheduled_assign_ms</a:Code>
 <a:CreationDate>1788940376</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789437629</a:ModificationDate>
@@ -1961,7 +1961,7 @@ LABL 0 新宋体,8,N</a:FontList>
 <o:EntityAttribute Id="o39">
 <a:ObjectID>44542387-1AD4-4964-BA7C-DFD713E0469A</a:ObjectID>
 <a:Name>分派时间戳</a:Name>
-<a:Code>assign_ts</a:Code>
+<a:Code>assign_ms</a:Code>
 <a:CreationDate>1788940004</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789437629</a:ModificationDate>
@@ -1973,7 +1973,7 @@ LABL 0 新宋体,8,N</a:FontList>
 <o:EntityAttribute Id="o36">
 <a:ObjectID>9F179AF6-780C-40D0-BF53-7C215049614D</a:ObjectID>
 <a:Name>预定分派时间戳</a:Name>
-<a:Code>scheduled_assign_ts</a:Code>
+<a:Code>scheduled_assign_ms</a:Code>
 <a:CreationDate>1789093112</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789437629</a:ModificationDate>
@@ -1998,7 +1998,7 @@ LABL 0 新宋体,8,N</a:FontList>
 <o:EntityAttribute Id="o41">
 <a:ObjectID>CE92D2E6-1819-4098-9CB8-E286C6D03944</a:ObjectID>
 <a:Name>开始执行时间戳</a:Name>
-<a:Code>exec_start_ts</a:Code>
+<a:Code>exec_start_ms</a:Code>
 <a:CreationDate>1789099006</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789099081</a:ModificationDate>
@@ -2009,7 +2009,7 @@ LABL 0 新宋体,8,N</a:FontList>
 <o:EntityAttribute Id="o42">
 <a:ObjectID>E4867B83-BA8D-4A8F-8B02-008B75BA98AD</a:ObjectID>
 <a:Name>结束执行时间戳</a:Name>
-<a:Code>exec_end_ts</a:Code>
+<a:Code>exec_end_ms</a:Code>
 <a:CreationDate>1789099006</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789099081</a:ModificationDate>
