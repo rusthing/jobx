@@ -11,7 +11,7 @@ use tokio::time::{interval, MissedTickBehavior};
 use tracing::{info, warn};
 use wheel_rs::config_utils::has_config_changed;
 
-const JOBX_SCHEDULER_CONFIG_KEY: &str = "utils.scheduler";
+const JOBX_SCHEDULER_CONFIG_KEY: &str = "jobx.scheduler";
 static JOBX_SCHEDULER_CONFIG: ArcSwapOption<JobxSchedulerConfig> = ArcSwapOption::const_empty();
 
 pub fn get_jobx_scheduler_config() -> Result<Arc<JobxSchedulerConfig>, CfgError> {

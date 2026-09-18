@@ -11,7 +11,7 @@ use tracing::info;
 use wheel_rs::config_utils::has_config_changed;
 
 static JOBX_API_CLIENT: ArcSwapOption<JobxApiClient> = ArcSwapOption::const_empty();
-const JOBX_API_CLIENT_CONFIG_KEY: &str = "utils";
+const JOBX_API_CLIENT_CONFIG_KEY: &str = "jobx";
 
 pub struct JobxApiClient {
     pub job_client: JobxJobApiClient,
@@ -30,7 +30,7 @@ pub async fn setup_jobx_api_client(
     apis_config: HashMap<String, ApiClientConfig>,
     changed: &Option<HashMap<String, Value>>,
 ) -> Result<(), CfgError> {
-    info!("setup utils api client...: {apis_config:?} {changed:?}");
+    info!("setup jobx api client...: {apis_config:?} {changed:?}");
     let key_prefix = format!("{}.{}", API_CLIENT_CONFIG_KEY, JOBX_API_CLIENT_CONFIG_KEY);
     if changed
         .as_ref()
@@ -41,7 +41,7 @@ pub async fn setup_jobx_api_client(
         let mut task_client: Option<JobxTaskApiClient> = None;
         for (key, api_client_config) in apis_config {
             if key == JOBX_API_CLIENT_CONFIG_KEY {
-                info!("utils api client config: {:?}", api_client_config);
+                info!("jobx api client config: {:?}", api_client_config);
                 job_client = Some(JobxJobApiClient::new(
                     FeignApiClient::new(api_client_config.clone()).await,
                 ));

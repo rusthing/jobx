@@ -19,9 +19,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::info;
 
-/// utils - 任务调度服务
+/// jobx - 任务调度服务
 ///
-/// SUMMARY: utils-svr 是一个任务调度服务，提供任务的创建、调度、执行和监控功能。
+/// SUMMARY: jobx-svr 是一个任务调度服务，提供任务的创建、调度、执行和监控功能。
 /// 支持 Cron 表达式定时调度、手动触发、任务重试和失败告警等特性。
 /// 通过 RESTful API 接口提供服务，支持 HTTP 和 HTTPS 协议。
 ///
