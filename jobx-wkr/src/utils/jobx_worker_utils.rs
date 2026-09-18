@@ -131,15 +131,19 @@ async fn run_worker_loop(
 
         for stream_key in reply.keys {
             for stream_id in stream_key.ids {
-                info!("收到任务: stream={}, id={}", stream_key.key, stream_id.id);
-                let job = match extract_job_from_message(&stream_id.map) {
-                    Ok(job) => job,
-                    Err(e) => {
-                        warn!("解析任务消息失败: id={}, error={}", stream_id.id, e);
-                        continue;
-                    }
-                };
-                handler.handle(&job).await;
+                let handler = Arc::clone(&handler);
+                let stream_name = stream_key.key.clone();
+                tokio::spawn(async move {
+                    info!("收到任务: stream={}, id={}", stream_name, stream_id.id);
+                    let job = match extract_job_from_message(&stream_id.map) {
+                        Ok(job) => job,
+                        Err(e) => {
+                            warn!("解析任务消息失败: id={}, error={}", stream_id.id, e);
+                            return;
+                        }
+                    };
+                    handler.handle(&job).await;
+                });
             }
         }
 
