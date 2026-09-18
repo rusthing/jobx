@@ -1,21 +1,21 @@
 profile = "dev"
 
-#[micro-svc.consul]
+#[micro-utils.consul]
 #base-url = "http://consul:8500"
 #config.file-format = "toml"
 #config.common-configs = "log.toml"
-#[micro-svc.consul.registry]
+#[micro-utils.consul.registry]
 #sub-net = "192.168.1.0/24"
 
 
-[jobx.scheduler]
+[jobx-scheduler]
 
 [redis]
 url = "redis://:xxxxxxxx@redis:6379"
 
 [db]
 url = "postgres://jobx:jobx@pgsql:5432/jobx"
-#url = "mysql://jobx:jobx@mysql:3306/jobx"
+#url = "mysql://utils:utils@mysql:3306/utils"
 
 [web]
 port = 9001

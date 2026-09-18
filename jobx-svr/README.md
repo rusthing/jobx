@@ -75,7 +75,7 @@ main.rs  ──→ config (配置加载与热更新)
 ### 数据库准备
 
 ```sql
-CREATE USER jobx WITH PASSWORD 'jobx';
+CREATE USER jobx WITH PASSWORD 'utils';
 CREATE DATABASE jobx OWNER jobx;
 ```
 

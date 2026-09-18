@@ -78,7 +78,7 @@ jobx/
 1. 创建 PostgreSQL 数据库：
 
 ```sql
-CREATE USER jobx WITH PASSWORD 'jobx';
+CREATE USER jobx WITH PASSWORD 'utils';
 CREATE DATABASE jobx OWNER jobx;
 ```
 

@@ -41,7 +41,7 @@ use std::collections::HashMap;
 // 配置 API 客户端
 let mut apis_config = HashMap::new();
 apis_config.insert(
-    "jobx".to_string(),
+    "utils".to_string(),
     ApiClientConfig {
         base_url: "http://localhost:8080".to_string(),
         ..Default::default()

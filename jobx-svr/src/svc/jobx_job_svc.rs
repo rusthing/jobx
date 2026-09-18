@@ -1,4 +1,5 @@
-use crate::config::{get_jobx_scheduler_config, SchedulerConfig};
+use crate::config::JobxSchedulerConfig;
+use crate::utils::get_jobx_scheduler_config;
 use chrono::{TimeZone, Utc};
 use cron::Schedule;
 use jobx_api::dic::JobType;
@@ -164,7 +165,7 @@ impl JobxJobSvc {
     {
         add_dto.validate()?;
 
-        let SchedulerConfig {
+        let JobxSchedulerConfig {
             high_freq_threshold_duration,
             assign_lead_duration: assign_lead_duration_default,
             ..
@@ -218,7 +219,7 @@ impl JobxJobSvc {
             .id
             .ok_or_else(|| validator::ValidationError::new("修改操作必须提供id"))?;
 
-        let SchedulerConfig {
+        let JobxSchedulerConfig {
             high_freq_threshold_duration,
             assign_lead_duration: assign_lead_duration_default,
             ..
@@ -284,7 +285,7 @@ impl JobxJobSvc {
     #[db_unwrap]
     #[log_call]
     pub async fn scan_and_publish<C>(
-        config: &SchedulerConfig,
+        config: &JobxSchedulerConfig,
         #[skip_log] db: Option<&C>,
     ) -> Result<(), SvcError>
     where

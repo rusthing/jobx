@@ -1,4 +1,4 @@
-use crate::config::jobx_config::JobxConfig;
+use crate::config::JobxSchedulerConfig;
 use idworker::IdWorkerConfig;
 use robotech::db::DbConnConfig;
 use robotech::redis::RedisConfig;
@@ -9,8 +9,8 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct AppConfig {
-    /// jobx
-    pub jobx: JobxConfig,
+    /// utils
+    pub jobx_scheduler: JobxSchedulerConfig,
     /// db
     pub db: DbConnConfig,
     /// Web服务器

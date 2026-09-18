@@ -2,7 +2,8 @@ use anyhow::anyhow;
 use clap::Parser;
 use config::Value;
 use idworker::setup_id_worker;
-use jobx_svr::config::{setup_jobx_config, AppConfig};
+use jobx_svr::config::AppConfig;
+use jobx_svr::utils::setup_jobx_scheduler_config;
 use robotech;
 use robotech::app::{wait_app_exit, AppWatcher};
 use robotech::dao::init_dao;
@@ -18,9 +19,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::info;
 
-/// jobx - 任务调度服务
+/// utils - 任务调度服务
 ///
-/// SUMMARY: jobx-svr 是一个任务调度服务，提供任务的创建、调度、执行和监控功能。
+/// SUMMARY: utils-svr 是一个任务调度服务，提供任务的创建、调度、执行和监控功能。
 /// 支持 Cron 表达式定时调度、手动触发、任务重试和失败告警等特性。
 /// 通过 RESTful API 接口提供服务，支持 HTTP 和 HTTPS 协议。
 ///
@@ -109,7 +110,7 @@ async fn setup(
     setup_redis_conn(app_config.redis.clone(), &None).await?;
     setup_db_conn(app_config.db.clone(), &changed).await?;
 
-    setup_jobx_config(app_config.jobx.clone(), &changed);
+    setup_jobx_scheduler_config(app_config.jobx_scheduler.clone(), &changed);
     setup_web_server(app_config.web.clone(), port, old_pid, &changed).await?;
 
     Ok(())
