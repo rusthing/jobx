@@ -81,6 +81,21 @@ pub struct SchedulerConfig {
     /// 高频任务时长阈值，当任务的执行间隔小于此阈值时，标记为高频任务
     #[serde(with = "duration_serde", default = "high_freq_threshold_default")]
     pub high_freq_threshold_duration: Duration,
+    /// 高频任务分派间隔，高频任务每次分派后，下次分派时间 = 上次分派时间 + 此间隔
+    #[serde(
+        with = "duration_serde",
+        default = "high_freq_assign_interval_default"
+    )]
+    pub high_freq_assign_interval: Duration,
+    /// 发布任务到 Redis Stream 的最大重试次数
+    #[serde(default = "publish_max_retries_default")]
+    pub publish_max_retries: u32,
+    /// 发布任务到 Redis Stream 失败时的重试间隔
+    #[serde(
+        with = "duration_serde",
+        default = "publish_retry_interval_default"
+    )]
+    pub publish_retry_interval: Duration,
 }
 
 fn build_ticker(period: Duration) -> tokio::time::Interval {
@@ -111,4 +126,16 @@ fn assign_lead_duration_default() -> Duration {
 
 fn high_freq_threshold_default() -> Duration {
     Duration::from_secs(60)
+}
+
+fn high_freq_assign_interval_default() -> Duration {
+    Duration::from_mins(5)
+}
+
+fn publish_max_retries_default() -> u32 {
+    5
+}
+
+fn publish_retry_interval_default() -> Duration {
+    Duration::from_secs(8)
 }

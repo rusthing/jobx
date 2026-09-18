@@ -119,12 +119,12 @@ impl JobxWkr {
     /// 拉取指定 job 下所有待执行（状态为 Running）的任务
     ///
     /// ## 参数
-    /// * `job_code` - 任务的计划编码
+    /// * `executor_code` - 任务的计划编码
     pub async fn fetch_pending_tasks(
         &self,
-        job_code: &str,
+        executor_code: &str,
     ) -> Result<Vec<JobxTaskVo>, ApiClientError> {
-        let job = self.get_job_by_code(job_code).await?;
+        let job = self.get_job_by_code(executor_code).await?;
         let job_id = job.id;
 
         let params = serde_json::json!({
@@ -149,12 +149,12 @@ impl JobxWkr {
     /// 拉取一个待执行的任务，没有则返回 `None`
     ///
     /// ## 参数
-    /// * `job_code` - 任务的计划编码
+    /// * `executor_code` - 任务的计划编码
     pub async fn fetch_one_pending_task(
         &self,
-        job_code: &str,
+        executor_code: &str,
     ) -> Result<Option<JobxTaskVo>, ApiClientError> {
-        let mut tasks = self.fetch_pending_tasks(job_code).await?;
+        let mut tasks = self.fetch_pending_tasks(executor_code).await?;
         Ok(if tasks.is_empty() { None } else { Some(tasks.remove(0)) })
     }
 

@@ -1,22 +1,34 @@
 use crate::config::{get_jobx_scheduler_config, SchedulerConfig};
-use crate::svc::JobxTaskSvc;
 use chrono::{TimeZone, Utc};
 use cron::Schedule;
-use jobx_api::dic::{JobType, TaskType};
-use jobx_api::dto::JobxTaskAddDto;
+use jobx_api::dic::JobType;
+use jobx_api::dto::JobxJobModifyDto;
 use robotech::api;
 use robotech::macros::svc;
-use robotech::redis::publish_to_stream;
-use sea_orm::DatabaseTransaction;
+use robotech::redis::publish_to_stream_if_not_exists;
 use std::str::FromStr;
 use std::time::Duration;
 use tracing::{info, warn};
 use wheel_rs::time_utils::now_ms;
 
+/// # 任务计划服务
+/// 负责任务计划的增删改查、调度计算以及定时扫描发布到 Redis Stream。
 #[svc(skip [add, modify])]
 pub struct JobxJobSvc;
 
 impl JobxJobSvc {
+    /// # 计算任务调度信息
+    /// 根据任务类型、cron 表达式或固定间隔、有效时间范围，计算下一次分派时间戳及是否为高频任务。
+    /// Manual 类型不参与调度，返回 None。
+    /// - job_type: 任务类型（Manual/Cron/FixedDelay/FixedRate）
+    /// - cron: cron 表达式，Cron 类型必填
+    /// - interval_duration: 固定间隔时长，FixedDelay/FixedRate 类型必填
+    /// - valid_begin_ms: 有效开始时间戳，None 表示从 0 开始
+    /// - valid_end_ms: 有效结束时间戳，None 表示无上限
+    /// - assign_lead_duration: 分派提前时长，None 时使用 assign_lead_duration_default
+    /// - assign_lead_duration_default: 默认分派提前时长
+    /// - high_freq_threshold_duration: 高频阈值，任务间隔低于此值视为高频任务
+    /// 返回 (是否高频任务, 下次分派时间戳)，Manual 类型返回 (None, None)
     fn calc_job_schedule(
         job_type: JobType,
         cron: Option<Option<String>>,
@@ -136,6 +148,11 @@ impl JobxJobSvc {
         }
     }
 
+    /// # 添加任务计划
+    /// 校验输入参数、计算调度信息后，将任务计划写入数据库。
+    /// - add_dto: 任务计划新增 DTO
+    /// - db: 数据库连接（事务）
+    /// 返回新创建的任务计划视图对象。
     #[db_unwrap(transaction_required)]
     #[log_call]
     pub async fn add<C>(
@@ -180,6 +197,12 @@ impl JobxJobSvc {
         Ok(Ro::success("添加成功".to_string()).extra(Some(one)))
     }
 
+    /// # 修改任务计划
+    /// 校验输入参数，若调度相关字段（job_type/cron/间隔/有效时间/提前时长）有变更，
+    /// 则与数据库原值合并后重新计算调度信息，最后更新数据库。
+    /// - modify_dto: 任务计划修改 DTO
+    /// - db: 数据库连接（事务）
+    /// 返回更新后的任务计划视图对象。
     #[db_unwrap(transaction_required)]
     #[log_call]
     pub async fn modify<C>(
@@ -251,6 +274,13 @@ impl JobxJobSvc {
         Ok(Ro::success("修改成功".to_string()).extra(Some(one)))
     }
 
+    /// # 扫描可发布任务并推送到 Redis Stream
+    /// 查询当前时间窗口内 `next_assign_ms` 到期的任务，序列化为 JSON 后
+    /// 以 `{stream_key}:{executor_code}` 为 key 调用 `publish_to_stream_if_not_exists` 幂等发布。
+    /// 每次发布在独立的 tokio 任务中执行，失败自动重试（次数与间隔由配置控制）。
+    /// - config: 调度配置（含 stream_key、时间窗口、重试次数与间隔等参数）
+    /// - db: 数据库连接
+    /// 无返回值，查询结果为空时直接返回 Ok(())。
     #[db_unwrap]
     #[log_call]
     pub async fn scan_and_publish<C>(
@@ -273,58 +303,151 @@ impl JobxJobSvc {
         for job in &jobs {
             let job = job.clone();
             let stream_key = config.stream_key.clone();
+            let publish_max_retries = config.publish_max_retries;
+            let publish_retry_interval = config.publish_retry_interval;
             tokio::spawn(async move {
-                let task_add_dto = JobxTaskAddDto::builder()
-                    .task_type(TaskType::Scheduled)
-                    .job_id(Some(job.id.into()))
-                    .scheduled_exec_start_ms(
-                        job.next_assign_ms
-                            .zip(job.assign_lead_duration.as_ref())
-                            .map(|(next_ms, lead)| {
-                                U64::from(u64::from(next_ms) + lead.as_millis() as u64)
-                            }),
-                    )
-                    .assign_ms(now_ms().into())
-                    ._current_user_id(job.updator_id.into())
-                    .build();
-
-                match JobxTaskSvc::add::<DatabaseTransaction>(task_add_dto, None).await {
-                    Ok(_) => {
-                        info!("添加任务到数据库成功: job_code={}", job.executor_code);
-                    }
-                    Err(e) => {
-                        warn!(
-                            "添加任务到数据库失败: job_code={}, error={:?}",
-                            job.executor_code, e
-                        );
-                        return;
-                    }
-                }
+                // let task_add_dto = JobxTaskAddDto::builder()
+                //     .task_type(TaskType::Scheduled)
+                //     .job_id(Some(job.id.into()))
+                //     .scheduled_exec_start_ms(
+                //         job.next_assign_ms
+                //             .zip(job.assign_lead_duration.as_ref())
+                //             .map(|(next_ms, lead)| {
+                //                 U64::from(u64::from(next_ms) + lead.as_millis() as u64)
+                //             }),
+                //     )
+                //     .assign_ms(now_ms().into())
+                //     ._current_user_id(job.updator_id.into())
+                //     .build();
+                //
+                // // 任务记录创建失败不 return，可能是重复发布（心跳），继续走发布流程
+                // match JobxTaskSvc::add::<DatabaseTransaction>(task_add_dto, None).await {
+                //     Ok(_) => {
+                //         info!("添加任务到数据库成功: executor_code={}", job.executor_code);
+                //     }
+                //     Err(e) => {
+                //         warn!(
+                //             "添加任务到数据库失败(可能是重复发布): executor_code={}, error={:?}",
+                //             job.executor_code, e
+                //         );
+                //     }
+                // }
 
                 let key = format!("{}:{}", stream_key, job.executor_code);
                 let payload = match serde_json::to_string(&job) {
                     Ok(p) => p,
                     Err(e) => {
                         warn!(
-                            "序列化任务失败: job_code={}, error={:?}",
+                            "序列化任务失败: executor_code={}, error={:?}",
                             job.executor_code, e
                         );
                         return;
                     }
                 };
-                match publish_to_stream(&key, &[("payload", &payload)]).await {
-                    Ok(msg_id) => {
-                        info!(
-                            "发布任务到 Redis Stream: job_code={}, job_name={}, msg_id={}",
-                            job.executor_code, job.name, msg_id
-                        );
+
+                let mut published = false;
+                for attempt in 0..publish_max_retries {
+                    match publish_to_stream_if_not_exists(&key, &[("payload", &payload)]).await {
+                        Ok(Some(msg_id)) => {
+                            info!(
+                                "发布任务到 Redis Stream: job_name={}, msg_id={}, executor_code={}",
+                                job.name, msg_id, job.executor_code
+                            );
+                            published = true;
+                            break;
+                        }
+                        Ok(None) => {
+                            warn!(
+                                "任务已存在: job_name={}, executor_code={}",
+                                job.name, job.executor_code
+                            );
+                            published = true;
+                            break;
+                        }
+                        Err(e) => {
+                            warn!(
+                                "发布任务到 Redis Stream 失败(第{}次): job_name={}, executor_code={}, error={:?}",
+                                attempt + 1,
+                                job.name,
+                                job.executor_code,
+                                e
+                            );
+                            if attempt < publish_max_retries - 1 {
+                                tokio::time::sleep(publish_retry_interval).await;
+                            }
+                        }
                     }
-                    Err(e) => {
-                        warn!(
-                            "发布任务到 Redis Stream 失败: job_code={}, error={:?}",
-                            job.executor_code, e
-                        );
-                    }
+                }
+
+                // // 高频任务：发布成功后才推进下次分派时间（心跳间隔）
+                // // 如果 next_assign_ms 更新失败，下轮扫描仍然会查到旧值并重新发布，
+                // // 虽然频率比预期高，但保证了容错性
+                // if published && job.high_freq == Some(true) {
+                //     let new_next = job
+                //         .next_assign_ms
+                //         .map(|n| {
+                //             (u64::from(n) as i64)
+                //                 .wrapping_add(high_freq_assign_interval.as_millis() as i64)
+                //         })
+                //         .unwrap_or_else(|| {
+                //             now_ms() as i64 + high_freq_assign_interval.as_millis() as i64
+                //         });
+                //
+                //     let modify_dto = JobxJobModifyDto::builder()
+                //         .id(job.id)
+                //         .next_assign_ms(Some(U64(new_next as u64)))
+                //         ._current_user_id(job.updator_id)
+                //         .build();
+                //     let active_model: ActiveModel = modify_dto.into();
+                //
+                //     // 在控制台层面的错误，由于任务已经发布，仅做告警
+                //     const UPDATE_MAX_RETRIES: u32 = 3;
+                //     for attempt in 0..UPDATE_MAX_RETRIES {
+                //         match robotech::db::get_db_conn() {
+                //             Ok(db_conn) => {
+                //                 match JobxJobDao::update(active_model.clone(), db_conn.as_ref())
+                //                     .await
+                //                 {
+                //                     Ok(_) => {
+                //                         info!(
+                //                             "更新高频任务下次分派时间成功: executor_code={}, next_assign_ms={}",
+                //                             job.executor_code, new_next
+                //                         );
+                //                         break;
+                //                     }
+                //                     Err(e) => {
+                //                         warn!(
+                //                             "更新高频任务下次分派时间失败(第{}次): executor_code={}, error={:?}",
+                //                             attempt + 1,
+                //                             job.executor_code,
+                //                             e
+                //                         );
+                //                         if attempt < UPDATE_MAX_RETRIES - 1 {
+                //                             tokio::time::sleep(Duration::from_secs(1)).await;
+                //                         }
+                //                     }
+                //                 }
+                //             }
+                //             Err(e) => {
+                //                 warn!(
+                //                     "获取数据库连接失败(第{}次): executor_code={}, error={:?}",
+                //                     attempt + 1,
+                //                     job.executor_code,
+                //                     e
+                //                 );
+                //                 if attempt < UPDATE_MAX_RETRIES - 1 {
+                //                     tokio::time::sleep(Duration::from_secs(1)).await;
+                //                 }
+                //             }
+                //         }
+                //     }
+                // }
+
+                if !published {
+                    warn!(
+                        "发布任务到 Redis Stream 最终失败(已重试{}次): job_name={}, executor_code={}",
+                        publish_max_retries, job.name, job.executor_code
+                    );
                 }
             });
         }
