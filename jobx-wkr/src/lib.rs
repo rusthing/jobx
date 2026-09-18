@@ -36,6 +36,7 @@ use reqwest::header::{HeaderMap, HeaderValue};
 use robotech::api::Ro;
 use robotech::api_client::{ApiClientConfig, ApiClientError};
 use robotech::micro_svc::FeignApiClient;
+use wheel_rs::time_utils::now_ms;
 
 /// Worker 配置
 #[derive(Debug, Clone)]
@@ -86,14 +87,6 @@ impl JobxWkr {
         Ok(headers)
     }
 
-    /// 获取当前时间戳（秒）
-    fn now_ms() -> u64 {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-    }
-
     /// 根据 job executor_code 获取 job 信息
     ///
     /// ## 参数
@@ -132,16 +125,16 @@ impl JobxWkr {
             "status": 0,
         });
         let headers = self.build_headers()?;
-        let ro: Ro<Vec<JobxTaskVo>> =
-            self.client
-                .request(
-                    reqwest::Method::GET,
-                    "/jobx/jobx-task/list",
-                    Some(&params),
-                    None::<&serde_json::Value>,
-                    Some(&headers),
-                )
-                .await?;
+        let ro: Ro<Vec<JobxTaskVo>> = self
+            .client
+            .request(
+                reqwest::Method::GET,
+                "/jobx/jobx-task/list",
+                Some(&params),
+                None::<&serde_json::Value>,
+                Some(&headers),
+            )
+            .await?;
 
         Ok(ro.extra.unwrap_or_default())
     }
@@ -155,7 +148,11 @@ impl JobxWkr {
         executor_code: &str,
     ) -> Result<Option<JobxTaskVo>, ApiClientError> {
         let mut tasks = self.fetch_pending_tasks(executor_code).await?;
-        Ok(if tasks.is_empty() { None } else { Some(tasks.remove(0)) })
+        Ok(if tasks.is_empty() {
+            None
+        } else {
+            Some(tasks.remove(0))
+        })
     }
 
     /// 标记任务开始执行
@@ -167,7 +164,7 @@ impl JobxWkr {
     pub async fn start_task(&self, task_id: u64) -> Result<(), ApiClientError> {
         let body = serde_json::json!({
             "id": task_id,
-            "execStartTs": Self::now_ms(),
+            "execStartTs": now_ms(),
         });
         let headers = self.build_headers()?;
         self.client
@@ -198,7 +195,7 @@ impl JobxWkr {
             "id": task_id,
             "status": 1,
             "execDetail": exec_detail,
-            "execEndMs": Self::now_ms(),
+            "execEndMs": now_ms(),
         });
         let headers = self.build_headers()?;
         self.client
@@ -229,7 +226,7 @@ impl JobxWkr {
             "id": task_id,
             "status": 2,
             "execDetail": exec_detail,
-            "execEndMs": Self::now_ms(),
+            "execEndMs": now_ms(),
         });
         let headers = self.build_headers()?;
         self.client
