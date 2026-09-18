@@ -3,6 +3,7 @@ use crate::config::{
 };
 use async_trait::async_trait;
 use config::Value;
+use jobx_api::vo::JobxJobVo;
 use redis::Value as RedisValue;
 use robotech::cfg::CfgError;
 use robotech::env::{AppEnv, EnvError, APP_ENV};
@@ -16,52 +17,38 @@ use wheel_rs::time_utils::build_ticker;
 
 /// # 消息处理 trait
 ///
-/// Worker 从 Redis Stream 收到任务消息后，会调用此 trait 进行处理。
-/// 下游客户端需实现此 trait 来完成实际的任务执行逻辑，例如解析 payload 并调用业务服务。
+/// Worker 从 Redis Stream 收到任务消息后，自动将 payload 反序列化为 `JobxJobVo`
+/// 并调用此 trait 进行处理。
+/// 下游客户端需实现此 trait 来完成实际的任务执行逻辑。
 ///
 /// ## 使用示例
 ///
 /// ```no_run
 /// use async_trait::async_trait;
-/// use jobx_wkr::MessageHandler;
-/// use std::collections::HashMap;
-/// use robotech::redis::Value;
+/// use jobx_api::vo::JobxJobVo;
+/// use jobx_wkr::JobxMessageHandler;
 ///
 /// struct MyHandler;
 ///
 /// #[async_trait]
-/// impl MessageHandler for MyHandler {
-///     async fn handle(
-///         &self,
-///         stream_key: &str,
-///         message_id: &str,
-///         fields: &HashMap<String, Value>,
-///     ) {
-///         if let Some(Value::Data(payload)) = fields.get("payload") {
-///             let payload_str = String::from_utf8_lossy(payload);
-///             // 执行业务逻辑...
-///         }
+/// impl JobxMessageHandler for MyHandler {
+///     async fn handle(&self, job: &JobxJobVo) {
+///         // job 包含任务计划的所有信息：executor_code、params、job_type 等
+///         // 下游客户端根据 job 信息执行具体业务逻辑
 ///     }
 /// }
 /// ```
 #[async_trait]
-pub trait MessageHandler: Send + Sync + 'static {
-    /// 处理从 Redis Stream 收到的一条消息
-    /// - stream_key: 消息来源的 Stream 键名（格式: `{executor_key}:{executor_code}`）
-    /// - message_id: 消息 ID（格式: `{毫秒时间戳}-{序号}`）
-    /// - fields: 消息字段键值对，通常包含 `"payload"` 字段（JSON 字符串）
-    async fn handle(
-        &self,
-        stream_key: &str,
-        message_id: &str,
-        fields: &HashMap<String, RedisValue>,
-    );
+pub trait JobxMessageHandler: Send + Sync + 'static {
+    /// 处理从 Redis Stream 收到的任务
+    /// - job: 反序列化后的任务计划视图对象，包含 executor_code、params、job_type 等完整字段
+    async fn handle(&self, job: &JobxJobVo);
 }
 
 pub async fn setup_jobx_worker(
     worker_config: JobxWorkerConfig,
     changed: &Option<HashMap<String, Value>>,
-    handler: Arc<dyn MessageHandler>,
+    handler: Arc<dyn JobxMessageHandler>,
 ) -> Result<(), CfgError> {
     info!("setup worker config...: {worker_config:?}");
     if changed
@@ -105,7 +92,7 @@ pub async fn setup_jobx_worker(
 async fn run_worker_loop(
     app_instance_id: String,
     initial_scan_interval: Duration,
-    handler: Arc<dyn MessageHandler>,
+    handler: Arc<dyn JobxMessageHandler>,
 ) {
     let mut ticker = build_ticker(initial_scan_interval);
     loop {
@@ -145,9 +132,14 @@ async fn run_worker_loop(
         for stream_key in reply.keys {
             for stream_id in stream_key.ids {
                 info!("收到任务: stream={}, id={}", stream_key.key, stream_id.id);
-                handler
-                    .handle(&stream_key.key, &stream_id.id, &stream_id.map)
-                    .await;
+                let job = match extract_job_from_message(&stream_id.map) {
+                    Ok(job) => job,
+                    Err(e) => {
+                        warn!("解析任务消息失败: id={}, error={}", stream_id.id, e);
+                        continue;
+                    }
+                };
+                handler.handle(&job).await;
             }
         }
 
@@ -155,6 +147,21 @@ async fn run_worker_loop(
             ticker = build_ticker(worker_config.scan_interval);
         }
     }
+}
+
+/// # 从 Redis Stream 消息中提取 JobxJobVo
+///
+/// 从消息的 `payload` 字段中取出 JSON 字符串，反序列化为任务计划视图对象。
+fn extract_job_from_message(fields: &HashMap<String, RedisValue>) -> Result<JobxJobVo, String> {
+    let payload = fields
+        .get("payload")
+        .and_then(|v| match v {
+            RedisValue::BulkString(bytes) => std::str::from_utf8(bytes).ok(),
+            _ => None,
+        })
+        .ok_or_else(|| "payload 字段缺失或格式错误".to_string())?;
+
+    serde_json::from_str(payload).map_err(|e| format!("JSON 反序列化失败: {e}"))
 }
 
 fn build_stream_key(executor_key: &str, executor_code: &str) -> String {
