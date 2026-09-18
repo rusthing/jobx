@@ -3,7 +3,7 @@ use clap::Parser;
 use config::Value;
 use idworker::setup_id_worker;
 use jobx_svr::config::AppConfig;
-use jobx_svr::utils::setup_jobx_scheduler_config;
+use jobx_svr::utils::setup_jobx_scheduler;
 use robotech;
 use robotech::app::{wait_app_exit, AppWatcher};
 use robotech::dao::init_dao;
@@ -110,7 +110,7 @@ async fn setup(
     setup_redis_conn(app_config.redis.clone(), &None).await?;
     setup_db_conn(app_config.db.clone(), &changed).await?;
 
-    setup_jobx_scheduler_config(app_config.jobx_scheduler.clone(), &changed);
+    setup_jobx_scheduler(app_config.jobx_scheduler.clone(), &changed);
     setup_web_server(app_config.web.clone(), port, old_pid, &changed).await?;
 
     Ok(())

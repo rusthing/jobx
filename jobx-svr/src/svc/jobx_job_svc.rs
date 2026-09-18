@@ -1,5 +1,4 @@
-use crate::config::JobxSchedulerConfig;
-use crate::utils::get_jobx_scheduler_config;
+use crate::config::{get_jobx_scheduler_config, JobxSchedulerConfig};
 use chrono::{TimeZone, Utc};
 use cron::Schedule;
 use jobx_api::dic::JobType;
@@ -303,7 +302,7 @@ impl JobxJobSvc {
 
         for job in &jobs {
             let job = job.clone();
-            let stream_key = config.stream_key.clone();
+            let stream_key = config.executor_key.clone();
             let publish_max_retries = config.publish_max_retries;
             let publish_retry_interval = config.publish_retry_interval;
             tokio::spawn(async move {

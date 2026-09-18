@@ -1,12 +1,29 @@
+use arc_swap::ArcSwapOption;
+use robotech::cfg::CfgError;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use std::time::Duration;
 use wheel_rs::serde::duration_serde;
 
+pub const JOBX_SCHEDULER_CONFIG_KEY: &str = "jobx.scheduler";
+static JOBX_SCHEDULER_CONFIG: ArcSwapOption<JobxSchedulerConfig> = ArcSwapOption::const_empty();
+
+pub fn get_jobx_scheduler_config() -> Result<Arc<JobxSchedulerConfig>, CfgError> {
+    JOBX_SCHEDULER_CONFIG.load_full().ok_or(CfgError::NotInit(
+        "Scheduler config not initialized".to_string(),
+    ))
+}
+
+pub fn set_jobx_scheduler_config(config: JobxSchedulerConfig) {
+    JOBX_SCHEDULER_CONFIG.store(Some(Arc::new(config.clone())));
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "kebab-case")]
 pub struct JobxSchedulerConfig {
-    /// Redis Stream 的 key
-    #[serde(default = "stream_key_default")]
-    pub stream_key: String,
+    /// Redis Stream 的 key的前缀，后面跟着任务执行器的编码
+    #[serde(default = "executor_key_default")]
+    pub executor_key: String,
     /// 扫描间隔
     #[serde(with = "duration_serde", default = "scan_interval_default")]
     pub scan_interval: Duration,
@@ -33,8 +50,8 @@ pub struct JobxSchedulerConfig {
     pub publish_retry_interval: Duration,
 }
 
-fn stream_key_default() -> String {
-    "utils:scheduler".to_string()
+fn executor_key_default() -> String {
+    "jobx:executor".to_string()
 }
 
 fn scan_interval_default() -> Duration {

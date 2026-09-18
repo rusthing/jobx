@@ -1,26 +1,18 @@
-use crate::config::JobxSchedulerConfig;
+use crate::config::{
+    get_jobx_scheduler_config, set_jobx_scheduler_config, JobxSchedulerConfig,
+    JOBX_SCHEDULER_CONFIG_KEY,
+};
 use crate::svc::JobxJobSvc;
-use arc_swap::ArcSwapOption;
 use config::Value;
-use robotech::cfg::CfgError;
 use sea_orm::DatabaseTransaction;
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::{interval, MissedTickBehavior};
 use tracing::{info, warn};
 use wheel_rs::config_utils::has_config_changed;
+use wheel_rs::time_utils::build_ticker;
 
-const JOBX_SCHEDULER_CONFIG_KEY: &str = "jobx.scheduler";
-static JOBX_SCHEDULER_CONFIG: ArcSwapOption<JobxSchedulerConfig> = ArcSwapOption::const_empty();
-
-pub fn get_jobx_scheduler_config() -> Result<Arc<JobxSchedulerConfig>, CfgError> {
-    JOBX_SCHEDULER_CONFIG.load_full().ok_or(CfgError::NotInit(
-        "Scheduler config not initialized".to_string(),
-    ))
-}
-
-pub fn setup_jobx_scheduler_config(
+pub fn setup_jobx_scheduler(
     schedule_config: JobxSchedulerConfig,
     changed: &Option<HashMap<String, Value>>,
 ) {
@@ -30,38 +22,37 @@ pub fn setup_jobx_scheduler_config(
         .map(|changed| has_config_changed(JOBX_SCHEDULER_CONFIG_KEY, changed))
         .unwrap_or(true)
     {
-        JOBX_SCHEDULER_CONFIG.store(Some(Arc::new(schedule_config.clone())));
+        set_jobx_scheduler_config(schedule_config.clone());
 
         // 如果是首次配置，启动扫描线程
         if changed.is_none() {
-            tokio::spawn(async move {
-                let mut ticker = build_ticker(schedule_config.scan_interval);
-                loop {
-                    ticker.tick().await;
-                    let config = match get_jobx_scheduler_config() {
-                        Ok(c) => c,
-                        Err(e) => {
-                            warn!("获取调度配置失败: {e:?}");
-                            tokio::time::sleep(Duration::from_secs(5)).await;
-                            continue;
-                        }
-                    };
-                    if let Err(e) =
-                        JobxJobSvc::scan_and_publish::<DatabaseTransaction>(&config, None).await
-                    {
-                        warn!("调度器扫描异常: {e:?}");
-                    }
-                    if config.scan_interval != ticker.period() {
-                        ticker = build_ticker(config.scan_interval);
-                    }
-                }
-            });
+            tokio::spawn(run_scheduler_loop(schedule_config.scan_interval));
         }
     }
 }
 
-fn build_ticker(period: Duration) -> tokio::time::Interval {
-    let mut ticker = interval(period);
-    ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    ticker
+/// # 启动调度器扫描循环
+///
+/// 按配置的扫描间隔定时拉取可发布任务并推送到 Redis Stream。
+/// 运行期间会动态读取最新配置，若扫描间隔变更则自动调整 ticker。
+/// 该函数不会返回，需通过 `tokio::spawn` 在独立任务中运行。
+async fn run_scheduler_loop(initial_scan_interval: Duration) {
+    let mut ticker = build_ticker(initial_scan_interval);
+    loop {
+        ticker.tick().await;
+        let config = match get_jobx_scheduler_config() {
+            Ok(c) => c,
+            Err(e) => {
+                warn!("获取调度配置失败: {e:?}");
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                continue;
+            }
+        };
+        if let Err(e) = JobxJobSvc::scan_and_publish::<DatabaseTransaction>(&config, None).await {
+            warn!("调度器扫描异常: {e:?}");
+        }
+        if config.scan_interval != ticker.period() {
+            ticker = build_ticker(config.scan_interval);
+        }
+    }
 }
