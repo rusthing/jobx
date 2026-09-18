@@ -1,19 +1,67 @@
 use crate::config::{
     get_jobx_worker_config, set_jobx_worker_config, JobxWorkerConfig, JOBX_WORKER_CONFIG_KEY,
 };
+use async_trait::async_trait;
 use config::Value;
+use redis::Value as RedisValue;
 use robotech::cfg::CfgError;
 use robotech::env::{AppEnv, EnvError, APP_ENV};
 use robotech::redis::{ensure_consumer_group, read_from_stream};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 use tracing::{info, warn};
 use wheel_rs::config_utils::has_config_changed;
 use wheel_rs::time_utils::build_ticker;
 
+/// # 消息处理 trait
+///
+/// Worker 从 Redis Stream 收到任务消息后，会调用此 trait 进行处理。
+/// 下游客户端需实现此 trait 来完成实际的任务执行逻辑，例如解析 payload 并调用业务服务。
+///
+/// ## 使用示例
+///
+/// ```no_run
+/// use async_trait::async_trait;
+/// use jobx_wkr::MessageHandler;
+/// use std::collections::HashMap;
+/// use robotech::redis::Value;
+///
+/// struct MyHandler;
+///
+/// #[async_trait]
+/// impl MessageHandler for MyHandler {
+///     async fn handle(
+///         &self,
+///         stream_key: &str,
+///         message_id: &str,
+///         fields: &HashMap<String, Value>,
+///     ) {
+///         if let Some(Value::Data(payload)) = fields.get("payload") {
+///             let payload_str = String::from_utf8_lossy(payload);
+///             // 执行业务逻辑...
+///         }
+///     }
+/// }
+/// ```
+#[async_trait]
+pub trait MessageHandler: Send + Sync + 'static {
+    /// 处理从 Redis Stream 收到的一条消息
+    /// - stream_key: 消息来源的 Stream 键名（格式: `{executor_key}:{executor_code}`）
+    /// - message_id: 消息 ID（格式: `{毫秒时间戳}-{序号}`）
+    /// - fields: 消息字段键值对，通常包含 `"payload"` 字段（JSON 字符串）
+    async fn handle(
+        &self,
+        stream_key: &str,
+        message_id: &str,
+        fields: &HashMap<String, RedisValue>,
+    );
+}
+
 pub async fn setup_jobx_worker(
     worker_config: JobxWorkerConfig,
     changed: &Option<HashMap<String, Value>>,
+    handler: Arc<dyn MessageHandler>,
 ) -> Result<(), CfgError> {
     info!("setup worker config...: {worker_config:?}");
     if changed
@@ -41,6 +89,7 @@ pub async fn setup_jobx_worker(
             tokio::spawn(run_worker_loop(
                 app_instance_id.to_string(),
                 worker_config.scan_interval,
+                handler,
             ));
         }
     }
@@ -50,9 +99,14 @@ pub async fn setup_jobx_worker(
 /// # 启动工作者订阅循环
 ///
 /// 订阅 Redis Stream 中发布的任务，阻塞等待新消息到达。
+/// 收到消息后调用 `handler` 处理，每条消息独立处理，便于下游客户端实现具体业务逻辑。
 /// 运行期间会动态读取最新配置，若扫描间隔变更则自动调整 ticker。
 /// 该函数不会返回，需通过 `tokio::spawn` 在独立任务中运行。
-async fn run_worker_loop(app_instance_id: String, initial_scan_interval: Duration) {
+async fn run_worker_loop(
+    app_instance_id: String,
+    initial_scan_interval: Duration,
+    handler: Arc<dyn MessageHandler>,
+) {
     let mut ticker = build_ticker(initial_scan_interval);
     loop {
         ticker.tick().await;
@@ -90,10 +144,10 @@ async fn run_worker_loop(app_instance_id: String, initial_scan_interval: Duratio
 
         for stream_key in reply.keys {
             for stream_id in stream_key.ids {
-                info!(
-                    "收到任务: stream={}, id={}, fields={:?}",
-                    stream_key.key, stream_id.id, stream_id.map
-                );
+                info!("收到任务: stream={}, id={}", stream_key.key, stream_id.id);
+                handler
+                    .handle(&stream_key.key, &stream_id.id, &stream_id.map)
+                    .await;
             }
         }
 

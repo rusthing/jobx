@@ -36,4 +36,4 @@ pub mod config;
 pub mod utils;
 
 pub use config::JobxWorkerConfig;
-pub use utils::*;
+pub use utils::{setup_jobx_worker, MessageHandler};
