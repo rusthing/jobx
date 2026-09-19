@@ -4754,16 +4754,15 @@ DAT 1788921306</a:History>
 </o:Column>
 <o:Column Id="o22">
 <a:ObjectID>7CEBFAC5-9140-4CF3-AE41-3DD28EC16902</a:ObjectID>
-<a:Name>分派提前时间</a:Name>
-<a:Code>assign_lead_duration</a:Code>
+<a:Name>分派提前毫秒数</a:Name>
+<a:Code>assign_lead_ms</a:Code>
 <a:CreationDate>1789108744</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789620096</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:History>ORG {66A747AE-88A6-4A8E-9E87-93B55925A505}
 DAT 1789108744</a:History>
-<a:DataType>VARCHAR(10)</a:DataType>
-<a:Length>10</a:Length>
+<a:DataType>BIGINT</a:DataType>
 <a:GlobalObjectID/>
 </o:Column>
 <o:Column Id="o23">
@@ -5176,6 +5175,152 @@ DAT 1788921306</a:History>
 <a:Modifier>张柏子</a:Modifier>
 <a:DataType>INT8</a:DataType>
 <a:Length>8</a:Length>
+<a:GlobalObjectID/>
+</o:Column>
+<o:Column Id="o50">
+<a:ObjectID>A1B2C3D4-E5F6-4789-A0B1-C2D3E4F5A6B7</a:ObjectID>
+<a:Name>执行器编码</a:Name>
+<a:Code>executor_code</a:Code>
+<a:CreationDate>1789620097</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1789620097</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:History>ORG {A1B2C3D4-E5F6-4789-A0B1-C2D3E4F5A6B7}
+DAT 1789620097</a:History>
+<a:DataType>VARCHAR(50)</a:DataType>
+<a:Length>50</a:Length>
+<a:Column.Mandatory>1</a:Column.Mandatory>
+<a:GlobalObjectID/>
+</o:Column>
+<o:Column Id="o51">
+<a:ObjectID>B2C3D4E5-F6A7-4890-B1C2-D3E4F5A6B7C8</a:ObjectID>
+<a:Name>执行器实例</a:Name>
+<a:Code>executor_instance</a:Code>
+<a:CreationDate>1789620097</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1789620097</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:History>ORG {B2C3D4E5-F6A7-4890-B1C2-D3E4F5A6B7C8}
+DAT 1789620097</a:History>
+<a:DataType>VARCHAR(100)</a:DataType>
+<a:Length>100</a:Length>
+<a:GlobalObjectID/>
+</o:Column>
+<o:Column Id="o52">
+<a:ObjectID>C3D4E5F6-A7B8-4901-C2D3-E4F5A6B7C8D9</a:ObjectID>
+<a:Name>执行参数</a:Name>
+<a:Code>exec_params</a:Code>
+<a:CreationDate>1789620097</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1789620097</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:History>ORG {C3D4E5F6-A7B8-4901-C2D3-E4F5A6B7C8D9}
+DAT 1789620097</a:History>
+<a:DataType>VARCHAR(800)</a:DataType>
+<a:Length>800</a:Length>
+<a:GlobalObjectID/>
+</o:Column>
+<o:Column Id="o53">
+<a:ObjectID>D4E5F6A7-B8C9-4012-D3E4-F5A6B7C8D9E0</a:ObjectID>
+<a:Name>计划类型</a:Name>
+<a:Code>job_type</a:Code>
+<a:CreationDate>1789620097</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1789620097</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:Comment>计划类型
+0: 手动分派
+1: cron表达式
+2: 固定延迟
+3: 固定频率</a:Comment>
+<a:History>ORG {D4E5F6A7-B8C9-4012-D3E4-F5A6B7C8D9E0}
+DAT 1789620097</a:History>
+<a:DataType>INT2</a:DataType>
+<a:Length>2</a:Length>
+<a:Column.Mandatory>1</a:Column.Mandatory>
+<a:GlobalObjectID/>
+</o:Column>
+<o:Column Id="o54">
+<a:ObjectID>E5F6A7B8-C9D0-4123-E4F5-A6B7C8D9E0F1</a:ObjectID>
+<a:Name>是否高频任务</a:Name>
+<a:Code>high_freq</a:Code>
+<a:CreationDate>1789620097</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1789620097</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:History>ORG {E5F6A7B8-C9D0-4123-E4F5-A6B7C8D9E0F1}
+DAT 1789620097</a:History>
+<a:DefaultValue>false</a:DefaultValue>
+<a:DataType>BOOL</a:DataType>
+<a:GlobalObjectID/>
+</o:Column>
+<o:Column Id="o55">
+<a:ObjectID>F6A7B8C9-D0E1-4234-F5A6-B7C8D9E0F1A2</a:ObjectID>
+<a:Name>cron表达式</a:Name>
+<a:Code>cron</a:Code>
+<a:CreationDate>1789620097</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1789620097</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:History>ORG {F6A7B8C9-D0E1-4234-F5A6-B7C8D9E0F1A2}
+DAT 1789620097</a:History>
+<a:DataType>VARCHAR(30)</a:DataType>
+<a:Length>30</a:Length>
+<a:GlobalObjectID/>
+</o:Column>
+<o:Column Id="o56">
+<a:ObjectID>A7B8C9D0-E1F2-4345-A6B7-C8D9E0F1A2B3</a:ObjectID>
+<a:Name>固定间隔时间</a:Name>
+<a:Code>interval_duration</a:Code>
+<a:CreationDate>1789620097</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1789620097</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:History>ORG {A7B8C9D0-E1F2-4345-A6B7-C8D9E0F1A2B3}
+DAT 1789620097</a:History>
+<a:DataType>VARCHAR(10)</a:DataType>
+<a:Length>10</a:Length>
+<a:GlobalObjectID/>
+</o:Column>
+<o:Column Id="o57">
+<a:ObjectID>B8C9D0E1-F2A3-4456-B7C8-D9E0F1A2B3C4</a:ObjectID>
+<a:Name>有效开始时间戳</a:Name>
+<a:Code>valid_begin_ms</a:Code>
+<a:CreationDate>1789620097</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1789620097</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:History>ORG {B8C9D0E1-F2A3-4456-B7C8-D9E0F1A2B3C4}
+DAT 1789620097</a:History>
+<a:DataType>INT8</a:DataType>
+<a:Length>8</a:Length>
+<a:GlobalObjectID/>
+</o:Column>
+<o:Column Id="o58">
+<a:ObjectID>C9D0E1F2-A3B4-4567-C8D9-E0F1A2B3C4D5</a:ObjectID>
+<a:Name>有效结束时间戳</a:Name>
+<a:Code>valid_end_ms</a:Code>
+<a:CreationDate>1789620097</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1789620097</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:History>ORG {C9D0E1F2-A3B4-4567-C8D9-E0F1A2B3C4D5}
+DAT 1789620097</a:History>
+<a:DataType>INT8</a:DataType>
+<a:Length>8</a:Length>
+<a:GlobalObjectID/>
+</o:Column>
+<o:Column Id="o59">
+<a:ObjectID>D0E1F2A3-B4C5-4678-D9E0-F1A2B3C4D5E6</a:ObjectID>
+<a:Name>分派提前毫秒数</a:Name>
+<a:Code>assign_lead_ms</a:Code>
+<a:CreationDate>1789620097</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1789620097</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:History>ORG {D0E1F2A3-B4C5-4678-D9E0-F1A2B3C4D5E6}
+DAT 1789620097</a:History>
+<a:DataType>BIGINT</a:DataType>
 <a:GlobalObjectID/>
 </o:Column>
 </c:Columns>

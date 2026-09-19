@@ -18,7 +18,7 @@ create table jobx_job (
                           valid_begin_ms       INT8                 null,
                           valid_end_ms         INT8                 null,
                           executor_code        VARCHAR(50)          not null,
-                          assign_lead_duration VARCHAR(10)          null,
+                          assign_lead_ms BIGINT                   null,
                           next_assign_ms       INT8                 null,
                           remark               VARCHAR(50)          null,
                           enabled              BOOL                 not null default true,
@@ -68,7 +68,7 @@ comment on column jobx_job.executor_code is
 '执行器编码
 发布任务消息时的key将以此编码结尾，只有相同编码的执行器才订阅此key';
 
-comment on column jobx_job.assign_lead_duration is
+comment on column jobx_job.assign_lead_ms is
 '分派提前时间';
 
 comment on column jobx_job.next_assign_ms is
@@ -109,6 +109,16 @@ create table jobx_task (
                            status               INT2                 not null default 0,
                            assign_ms            INT8                 not null,
                           scheduled_exec_start_ms INT8             null,
+                          executor_code        VARCHAR(50)          not null,
+                          executor_instance    VARCHAR(100)         null,
+                          exec_params          VARCHAR(800)         null,
+                          job_type             INT2                 not null,
+                          high_freq            BOOL                 null default false,
+                          cron                 VARCHAR(30)          null,
+                          interval_duration    VARCHAR(10)          null,
+                          valid_begin_ms       INT8                 null,
+                          valid_end_ms         INT8                 null,
+                          assign_lead_ms BIGINT                   null,
                           exec_detail          VARCHAR(800)         null,
                            exec_start_ms        INT8                 null,
                            exec_end_ms          INT8                 null,
@@ -146,6 +156,40 @@ comment on column jobx_task.assign_ms is
 
 comment on column jobx_task.scheduled_exec_start_ms is
 '预定开始执行时间戳';
+
+comment on column jobx_task.executor_code is
+'执行器编码';
+
+comment on column jobx_task.executor_instance is
+'执行器实例';
+
+comment on column jobx_task.exec_params is
+'执行参数';
+
+comment on column jobx_task.job_type is
+'计划类型
+0: 手动分派
+1: cron表达式
+2: 固定延迟
+3: 固定频率';
+
+comment on column jobx_task.high_freq is
+'是否高频任务';
+
+comment on column jobx_task.cron is
+'cron表达式';
+
+comment on column jobx_task.interval_duration is
+'固定间隔时间';
+
+comment on column jobx_task.valid_begin_ms is
+'有效开始时间戳';
+
+comment on column jobx_task.valid_end_ms is
+'有效结束时间戳';
+
+comment on column jobx_task.assign_lead_ms is
+'分派提前时间';
 
 comment on column jobx_task.exec_detail is
 '执行详情';

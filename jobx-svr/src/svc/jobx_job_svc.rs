@@ -25,7 +25,7 @@ impl JobxJobSvc {
     /// - interval_duration: 固定间隔时长，FixedDelay/FixedRate 类型必填
     /// - valid_begin_ms: 有效开始时间戳，None 表示从 0 开始
     /// - valid_end_ms: 有效结束时间戳，None 表示无上限
-    /// - assign_lead_duration: 分派提前时长，None 时使用 assign_lead_duration_default
+    /// - assign_lead_ms: 分派提前毫秒数，None 时使用 assign_lead_duration_default
     /// - assign_lead_duration_default: 默认分派提前时长
     /// - high_freq_threshold_duration: 高频阈值，任务间隔低于此值视为高频任务
     /// 返回 (是否高频任务, 下次分派时间戳)，Manual 类型返回 (None, None)
@@ -35,7 +35,7 @@ impl JobxJobSvc {
         interval_duration: Option<Option<api::Duration>>,
         valid_begin_ms: Option<Option<U64>>,
         valid_end_ms: Option<Option<U64>>,
-        assign_lead_duration: Option<Option<api::Duration>>,
+        assign_lead_ms: Option<Option<U64>>,
         assign_lead_duration_default: Duration,
         high_freq_threshold_duration: Duration,
     ) -> Result<(Option<bool>, Option<U64>), SvcError> {
@@ -46,10 +46,10 @@ impl JobxJobSvc {
         let interval_duration = interval_duration.flatten();
         let valid_begin_ms = valid_begin_ms.flatten();
         let valid_end_ms = valid_end_ms.flatten();
-        let assign_lead_duration = assign_lead_duration
+        let assign_lead_ms = assign_lead_ms
             .flatten()
-            .map(|d| d.into())
-            .unwrap_or(assign_lead_duration_default);
+            .map(u64::from)
+            .unwrap_or(assign_lead_duration_default.as_millis() as u64);
 
         let has_range = valid_begin_ms.is_some() || valid_end_ms.is_some();
         let mut valid_begin_ms = valid_begin_ms.unwrap_or(U64(0));
@@ -107,7 +107,7 @@ impl JobxJobSvc {
                 };
 
                 // 计算下一次分配时间戳
-                let next_assign_ms: u64 = (first_exec_ms - assign_lead_duration.as_millis()).into();
+                let next_assign_ms: u64 = (first_exec_ms - assign_lead_ms).into();
 
                 Ok((Some(high_freq), Some(next_assign_ms.into())))
             }
@@ -141,7 +141,7 @@ impl JobxJobSvc {
                 let high_freq = interval_ms < high_freq_threshold_ms;
 
                 // 计算下一次分配时间戳
-                let next_assign_ms: u64 = (first_exec_ms - assign_lead_duration.as_millis()).into();
+                let next_assign_ms: u64 = (first_exec_ms - assign_lead_ms).into();
 
                 Ok((Some(high_freq), Some(next_assign_ms.into())))
             }
@@ -177,7 +177,7 @@ impl JobxJobSvc {
         let interval_duration = add_dto.interval_duration.clone();
         let valid_begin_ms = add_dto.valid_begin_ms.clone();
         let valid_end_ms = add_dto.valid_end_ms.clone();
-        let assign_lead_duration = add_dto.assign_lead_duration.clone();
+        let assign_lead_ms = add_dto.assign_lead_ms.clone();
 
         let (high_freq, next_assign_ms) = Self::calc_job_schedule(
             job_type,
@@ -185,7 +185,7 @@ impl JobxJobSvc {
             interval_duration,
             valid_begin_ms,
             valid_end_ms,
-            assign_lead_duration,
+            assign_lead_ms,
             assign_lead_duration_default,
             high_freq_threshold_duration,
         )?;
@@ -230,7 +230,7 @@ impl JobxJobSvc {
             || modify_dto.interval_duration.is_some()
             || modify_dto.valid_begin_ms.is_some()
             || modify_dto.valid_end_ms.is_some()
-            || modify_dto.assign_lead_duration.is_some();
+            || modify_dto.assign_lead_ms.is_some();
         if has_schedule_change {
             // 先从 DTO 取出已设置的调度字段值（在 into() 消费 DTO 之前）
             // 注意：字符串字段需 clone 为自有值，避免借用冲突
@@ -239,7 +239,7 @@ impl JobxJobSvc {
             let interval_duration = modify_dto.interval_duration.clone();
             let valid_begin_ms = modify_dto.valid_begin_ms.clone();
             let valid_end_ms = modify_dto.valid_end_ms.clone();
-            let assign_lead_duration = modify_dto.assign_lead_duration.clone();
+            let assign_lead_ms = modify_dto.assign_lead_ms.clone();
 
             // 获取原记录以获取可能未在modify_dto中设置的字段
             let existing = JobxJobDao::get_by_id::<_, JobxJobVo>(id, db)
@@ -252,8 +252,8 @@ impl JobxJobSvc {
             let interval_duration = interval_duration.or(Some(existing.interval_duration.clone()));
             let valid_begin_ms = valid_begin_ms.or(Some(existing.valid_begin_ms.clone()));
             let valid_end_ms = valid_end_ms.or(Some(existing.valid_end_ms.clone()));
-            let assign_lead_duration =
-                assign_lead_duration.or(Some(existing.assign_lead_duration.clone()));
+            let assign_lead_ms =
+                assign_lead_ms.or(Some(existing.assign_lead_ms.clone()));
 
             let (high_freq, next_assign_ms) = Self::calc_job_schedule(
                 job_type,
@@ -261,7 +261,7 @@ impl JobxJobSvc {
                 interval_duration,
                 valid_begin_ms,
                 valid_end_ms,
-                assign_lead_duration,
+                assign_lead_ms,
                 assign_lead_duration_default,
                 high_freq_threshold_duration,
             )?;
@@ -309,11 +309,21 @@ impl JobxJobSvc {
                 // let task_add_dto = JobxTaskAddDto::builder()
                 //     .task_type(TaskType::Scheduled)
                 //     .job_id(Some(job.id.into()))
+                //     .executor_code(job.executor_code.clone())
+                //     .executor_instance(None)
+                //     .exec_params(job.params.clone())
+                //     .job_type(job.job_type)
+                //     .high_freq(job.high_freq)
+                //     .cron(job.cron.clone())
+                //     .interval_duration(job.interval_duration)
+                //     .valid_begin_ms(job.valid_begin_ms.map(|v| v.into()))
+                //     .valid_end_ms(job.valid_end_ms.map(|v| v.into()))
+                //     .assign_lead_ms(job.assign_lead_ms)
                 //     .scheduled_exec_start_ms(
                 //         job.next_assign_ms
-                //             .zip(job.assign_lead_duration.as_ref())
-                //             .map(|(next_ms, lead)| {
-                //                 U64::from(u64::from(next_ms) + lead.as_millis() as u64)
+                //             .zip(job.assign_lead_ms)
+                //             .map(|(next_ms, lead_ms)| {
+                //                 U64::from(u64::from(next_ms) + lead_ms)
                 //             }),
                 //     )
                 //     .assign_ms(now_ms().into())

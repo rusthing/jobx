@@ -25,8 +25,8 @@ pub struct JobxJobVo {
     pub valid_begin_ms: Option<u64>,
     /// 有效结束时间戳
     pub valid_end_ms: Option<u64>,
-    /// 分派提前时间
-    pub assign_lead_duration: Option<Duration>,
+    /// 分派提前毫秒数
+    pub assign_lead_ms: Option<u64>,
     /// 下次分派时间戳
     pub next_assign_ms: Option<u64>,
     /// 备注

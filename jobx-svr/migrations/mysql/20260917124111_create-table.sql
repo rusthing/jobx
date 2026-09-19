@@ -24,7 +24,7 @@ create table jobx_job
     valid_end_ms         bigint  comment '有效结束时间戳',
     executor_code        varchar(50) not null  comment '执行器编码
              发布任务消息时的key将以此编码结尾，只有相同编码的执行器才订阅此key',
-    assign_lead_duration varchar(10)  comment '分派提前时间',
+    assign_lead_ms bigint  comment '分派提前毫秒数',
     next_assign_ms       bigint  comment '下次分派时间戳',
     remark               varchar(50)  comment '备注',
     enabled              bit(1) not null default true  comment '启用',
@@ -55,6 +55,20 @@ create table jobx_task
              ',
     assign_ms            bigint not null  comment '分派时间戳',
     scheduled_exec_start_ms bigint  comment '预定开始执行时间戳',
+    executor_code        varchar(50) not null  comment '执行器编码',
+    executor_instance    varchar(100)  comment '执行器实例',
+    exec_params          varchar(800)  comment '执行参数',
+    job_type             tinyint not null  comment '计划类型
+             0: 手动分派
+             1: cron表达式
+             2: 固定延迟
+             3: 固定频率',
+    high_freq            bit(1) default false  comment '是否高频任务',
+    cron                 varchar(30)  comment 'cron表达式',
+    interval_duration    varchar(10)  comment '固定间隔时间',
+    valid_begin_ms       bigint  comment '有效开始时间戳',
+    valid_end_ms         bigint  comment '有效结束时间戳',
+    assign_lead_ms bigint  comment '分派提前毫秒数',
     exec_detail          varchar(800)  comment '执行详情',
     exec_start_ms        bigint  comment '开始执行时间戳',
     exec_end_ms          bigint  comment '结束执行时间戳',

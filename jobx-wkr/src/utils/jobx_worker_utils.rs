@@ -4,7 +4,7 @@ use crate::config::{
 use async_trait::async_trait;
 use config::Value;
 use jobx_api::dic::{TaskStatus, TaskType};
-use jobx_api::vo::JobxJobVo;
+use jobx_api::vo::{JobxJobVo, JobxTaskVo};
 use jobx_api_client::api_client::{get_jobx_api_client, setup_jobx_api_client};
 use jobx_api_client::dto::{JobxTaskAddDto, JobxTaskModifyDto};
 use redis::Value as RedisValue;
@@ -16,13 +16,14 @@ use robotech::redis::{ensure_consumer_group, read_from_stream};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::time::Instant;
 use tracing::{info, warn};
 use wheel_rs::config_utils::has_config_changed;
 use wheel_rs::time_utils::{build_ticker, now_ms};
 
 /// # 消息处理 trait
 ///
-/// Worker 从 Redis Stream 收到任务消息后，自动将 payload 反序列化为 `JobxJobVo`
+/// Worker 从 Redis Stream 收到任务消息后，自动创建任务记录并反序列化为 `JobxTaskVo`，
 /// 并调用此 trait 进行处理。
 /// 下游客户端需实现此 trait 来完成实际的任务执行逻辑。
 ///
@@ -30,24 +31,24 @@ use wheel_rs::time_utils::{build_ticker, now_ms};
 ///
 /// ```no_run
 /// use async_trait::async_trait;
-/// use jobx_api::vo::JobxJobVo;
+/// use jobx_api::vo::JobxTaskVo;
 /// use jobx_wkr::JobxMessageHandler;
 ///
 /// struct MyHandler;
 ///
 /// #[async_trait]
 /// impl JobxMessageHandler for MyHandler {
-///     async fn handle(&self, job: &JobxJobVo) {
-///         // job 包含任务计划的所有信息：executor_code、params、job_type 等
-///         // 下游客户端根据 job 信息执行具体业务逻辑
+///     async fn handle(&self, task: &JobxTaskVo) {
+///         // task 包含任务的所有信息：executor_code、exec_params、job_type、task_id 等
+///         // 下游客户端根据 task 信息执行具体业务逻辑
 ///     }
 /// }
 /// ```
 #[async_trait]
 pub trait JobxMessageHandler: Send + Sync + 'static {
-    /// 处理从 Redis Stream 收到的任务
-    /// - job: 反序列化后的任务计划视图对象，包含 executor_code、params、job_type 等完整字段
-    async fn handle(&self, job: &JobxJobVo);
+    /// 处理任务
+    /// - task: 任务视图对象，包含 executor_code、exec_params、job_type、task_id 等完整字段
+    async fn handle(&self, task: &JobxTaskVo);
 }
 
 pub async fn setup_jobx_worker(
@@ -142,6 +143,7 @@ async fn run_worker_loop(
             for stream_id in stream_key.ids {
                 let handler = Arc::clone(&handler);
                 let stream_name = stream_key.key.clone();
+                let instance_id = app_instance_id.clone();
                 tokio::spawn(async move {
                     info!("收到任务: stream={}, id={}", stream_name, stream_id.id);
 
@@ -172,7 +174,23 @@ async fn run_worker_loop(
                         .task_type(task_type)
                         .job_id(Some(job.id.into()))
                         .assign_ms(assign_ms.into())
-                        .scheduled_exec_start_ms(job.next_assign_ms.map(Into::into))
+                        .scheduled_exec_start_ms(
+                            job.next_assign_ms
+                                .zip(job.assign_lead_ms)
+                                .map(|(next_ms, lead_ms)| {
+                                    U64::from(u64::from(next_ms) + lead_ms)
+                                }),
+                        )
+                        .executor_code(job.executor_code.clone())
+                        .executor_instance(Some(instance_id))
+                        .exec_params(job.params.clone())
+                        .job_type(job.job_type)
+                        .high_freq(job.high_freq)
+                        .cron(job.cron.clone())
+                        .interval_duration(job.interval_duration)
+                        .valid_begin_ms(job.valid_begin_ms.map(|v| v.into()))
+                        .valid_end_ms(job.valid_end_ms.map(|v| v.into()))
+                        .assign_lead_ms(job.assign_lead_ms.map(U64::from))
                         ._current_user_id(user_id)
                         .build();
                     let task = match api_client.task_client.add(&add_dto).await {
@@ -191,13 +209,14 @@ async fn run_worker_loop(
                     let task_id = task.id;
 
                     // 如果设定了预定执行时间，延迟到该时间再执行
-                    if let Some(scheduled_ms) = job.next_assign_ms {
+                    if let Some(scheduled_ms) = task.scheduled_exec_start_ms {
                         let scheduled_ms = U64::from(scheduled_ms).value();
                         let now = now_ms();
                         if scheduled_ms > now {
-                            let delay_ms = scheduled_ms - now;
-                            info!("任务 {} 延迟 {}ms 到预定时间再执行", task_id, delay_ms);
-                            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                            info!("任务 {} 延迟到预定时间 {}ms 再执行", task_id, scheduled_ms);
+                            let deadline =
+                                Instant::now() + Duration::from_millis(scheduled_ms - now);
+                            tokio::time::sleep_until(deadline).await;
                         }
                     }
 
@@ -214,7 +233,7 @@ async fn run_worker_loop(
 
                     // 执行业务逻辑
                     let handle_result =
-                        tokio::spawn(async move { handler.handle(&job).await }).await;
+                        tokio::spawn(async move { handler.handle(&task).await }).await;
 
                     // 上报执行结果
                     match handle_result {
@@ -226,9 +245,7 @@ async fn run_worker_loop(
                                 .exec_end_ms(Some(now_ms().into()))
                                 ._current_user_id(user_id)
                                 .build();
-                            if let Err(e) =
-                                api_client.task_client.modify(&success_dto).await
-                            {
+                            if let Err(e) = api_client.task_client.modify(&success_dto).await {
                                 warn!("上报任务 {} 执行结果失败: {e:?}", task_id);
                             }
                         }
@@ -246,8 +263,7 @@ async fn run_worker_loop(
                                 .exec_end_ms(Some(now_ms().into()))
                                 ._current_user_id(user_id)
                                 .build();
-                            if let Err(e) = api_client.task_client.modify(&fail_dto).await
-                            {
+                            if let Err(e) = api_client.task_client.modify(&fail_dto).await {
                                 warn!("上报任务 {} 执行结果失败: {e:?}", task_id);
                             }
                         }
