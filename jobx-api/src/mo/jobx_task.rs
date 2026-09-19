@@ -26,6 +26,7 @@ pub struct Model {
     pub valid_begin_ms: Option<i64>,
     pub valid_end_ms: Option<i64>,
     pub assign_lead_ms: Option<i64>,
+    pub report_result: bool,
     pub exec_detail: Option<String>,
     pub exec_start_ms: Option<i64>,
     pub exec_end_ms: Option<i64>,

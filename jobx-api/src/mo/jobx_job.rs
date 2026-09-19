@@ -20,6 +20,7 @@ pub struct Model {
     pub valid_begin_ms: Option<i64>,
     pub valid_end_ms: Option<i64>,
     pub assign_lead_ms: Option<i64>,
+    pub report_result: bool,
     pub next_assign_ms: Option<i64>,
     pub remark: Option<String>,
     pub enabled: bool,

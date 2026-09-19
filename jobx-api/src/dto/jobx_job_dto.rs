@@ -25,6 +25,9 @@ pub struct JobxJobDto {
     pub valid_end_ms: Option<u64>,
     /// 分派提前毫秒数
     pub assign_lead_ms: Option<u64>,
+    /// 是否上报执行结果
+    #[db_default]
+    pub report_result: bool,
     /// 下次分派时间戳
     pub next_assign_ms: Option<u64>,
     /// 备注

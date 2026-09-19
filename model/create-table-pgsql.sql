@@ -19,6 +19,7 @@ create table jobx_job (
    valid_end_ms         INT8                 null,
    executor_code        VARCHAR(50)          not null,
    assign_lead_ms BIGINT                   null,
+   report_result        BOOL                 not null default true,
    next_assign_ms       INT8                 null,
    remark               VARCHAR(50)          null,
    enabled              BOOL                 not null default true,
@@ -71,6 +72,9 @@ comment on column jobx_job.executor_code is
 comment on column jobx_job.assign_lead_ms is
 '分派提前时间';
 
+comment on column jobx_job.report_result is
+'是否上报执行结果到服务端';
+
 comment on column jobx_job.next_assign_ms is
 '下次分派时间戳';
 
@@ -119,6 +123,7 @@ create table jobx_task (
    valid_begin_ms       INT8                 null,
    valid_end_ms         INT8                 null,
    assign_lead_ms BIGINT                   null,
+   report_result        BOOL                 not null default true,
    exec_detail          VARCHAR(800)         null,
    exec_start_ms        INT8                 null,
    exec_end_ms          INT8                 null,
@@ -190,6 +195,9 @@ comment on column jobx_task.valid_end_ms is
 
 comment on column jobx_task.assign_lead_ms is
 '分派提前时间';
+
+comment on column jobx_task.report_result is
+'是否上报执行结果到服务端';
 
 comment on column jobx_task.exec_detail is
 '执行详情';

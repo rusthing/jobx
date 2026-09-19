@@ -39,6 +39,12 @@ pub struct JobxWorkerConfig {
     /// 单次接收消息的最大数量
     #[serde(default = "max_messages_default")]
     pub max_messages: usize,
+    /// 上报执行结果失败时最大重试次数
+    #[serde(default = "report_retry_count_default")]
+    pub report_retry_count: u32,
+    /// 上报执行结果重试间隔
+    #[serde(with = "duration_serde", default = "report_retry_interval_default")]
+    pub report_retry_interval: Duration,
 }
 
 fn executor_key_default() -> String {
@@ -59,4 +65,12 @@ fn scan_block_default() -> Duration {
 
 fn max_messages_default() -> usize {
     100
+}
+
+fn report_retry_count_default() -> u32 {
+    3
+}
+
+fn report_retry_interval_default() -> Duration {
+    Duration::from_secs(1)
 }

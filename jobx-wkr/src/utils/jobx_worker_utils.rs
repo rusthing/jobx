@@ -3,9 +3,9 @@ use crate::config::{
 };
 use async_trait::async_trait;
 use config::Value;
-use jobx_api::dic::{TaskStatus, TaskType};
+use jobx_api::dic::{JobType, TaskStatus, TaskType};
 use jobx_api::vo::{JobxJobVo, JobxTaskVo};
-use jobx_api_client::api_client::{get_jobx_api_client, setup_jobx_api_client};
+use jobx_api_client::api_client::{get_jobx_api_client, setup_jobx_api_client, JobxApiClient};
 use jobx_api_client::dto::{JobxTaskAddDto, JobxTaskModifyDto};
 use redis::Value as RedisValue;
 use robotech::api::U64;
@@ -177,9 +177,7 @@ async fn run_worker_loop(
                         .scheduled_exec_start_ms(
                             job.next_assign_ms
                                 .zip(job.assign_lead_ms)
-                                .map(|(next_ms, lead_ms)| {
-                                    U64::from(u64::from(next_ms) + lead_ms)
-                                }),
+                                .map(|(next_ms, lead_ms)| U64::from(u64::from(next_ms) + lead_ms)),
                         )
                         .executor_code(job.executor_code.clone())
                         .executor_instance(Some(instance_id))
@@ -191,6 +189,7 @@ async fn run_worker_loop(
                         .valid_begin_ms(job.valid_begin_ms.map(|v| v.into()))
                         .valid_end_ms(job.valid_end_ms.map(|v| v.into()))
                         .assign_lead_ms(job.assign_lead_ms.map(U64::from))
+                        .report_result(job.report_result)
                         ._current_user_id(user_id)
                         .build();
                     let task = match api_client.task_client.add(&add_dto).await {
@@ -220,52 +219,105 @@ async fn run_worker_loop(
                         }
                     }
 
-                    // 标记任务开始执行
-                    let exec_start_ms = now_ms();
-                    let start_dto = JobxTaskModifyDto::builder()
-                        .id(task_id.into())
-                        .exec_start_ms(Some(exec_start_ms.into()))
-                        ._current_user_id(user_id)
-                        .build();
-                    if let Err(e) = api_client.task_client.modify(&start_dto).await {
-                        warn!("标记任务 {} 开始执行失败: {e:?}", task_id);
-                    }
+                    // ---- 执行任务 ----
+                    let retry_config = get_jobx_worker_config().ok();
+                    let (retry_count, retry_interval) = retry_config
+                        .as_ref()
+                        .map(|c| (c.report_retry_count, c.report_retry_interval))
+                        .unwrap_or((3, Duration::from_secs(1)));
 
-                    // 执行业务逻辑
-                    let handle_result =
-                        tokio::spawn(async move { handler.handle(&task).await }).await;
+                    let is_high_freq = task.high_freq == Some(true);
 
-                    // 上报执行结果
-                    match handle_result {
-                        Ok(()) => {
-                            info!("任务 {} 执行成功", task_id);
-                            let success_dto = JobxTaskModifyDto::builder()
-                                .id(task_id.into())
-                                .status(TaskStatus::Success)
-                                .exec_end_ms(Some(now_ms().into()))
-                                ._current_user_id(user_id)
-                                .build();
-                            if let Err(e) = api_client.task_client.modify(&success_dto).await {
-                                warn!("上报任务 {} 执行结果失败: {e:?}", task_id);
+                    if is_high_freq {
+                        // 高频任务：按 plan_type 决定循环策略，到有效结束时间退出
+                        // 循环内不标记开始、不创建新记录，全部执行完后统一上报
+                        let interval_ms = task
+                            .interval_duration
+                            .as_ref()
+                            .map(|d| d.as_millis() as u64)
+                            .unwrap_or(1000);
+                        let end_ms = task.valid_end_ms.map_or(u64::MAX, |v| u64::from(v));
+                        let is_fixed_rate = task.job_type == JobType::FixedRate;
+                        let mut exec_count = 0u64;
+
+                        let strategy_desc = if is_fixed_rate {
+                            "固定频率"
+                        } else {
+                            "固定延迟"
+                        };
+                        info!(
+                            "高频任务 {} 开始循环执行 ({}, interval={}ms, end={}ms)",
+                            task_id, strategy_desc, interval_ms, end_ms
+                        );
+
+                        loop {
+                            let loop_start = now_ms();
+                            if loop_start >= end_ms {
+                                break;
+                            }
+                            exec_count += 1;
+
+                            let h = Arc::clone(&handler);
+                            h.handle(&task).await;
+
+                            let sleep_ms = if is_fixed_rate {
+                                // 固定频率：从执行开始起算间隔
+                                let elapsed = now_ms() - loop_start;
+                                if elapsed < interval_ms {
+                                    interval_ms - elapsed
+                                } else {
+                                    0
+                                }
+                            } else {
+                                // 固定延迟（Cron / FixedDelay）：执行完成后等待 interval_ms
+                                interval_ms
+                            };
+
+                            if sleep_ms > 0 {
+                                tokio::time::sleep(Duration::from_millis(sleep_ms)).await;
                             }
                         }
-                        Err(e) => {
-                            let err_msg = if e.is_panic() {
-                                "任务执行发生 panic".to_string()
-                            } else {
-                                "任务被取消".to_string()
-                            };
-                            warn!("任务 {} 执行失败: {}", task_id, err_msg);
-                            let fail_dto = JobxTaskModifyDto::builder()
-                                .id(task_id.into())
-                                .status(TaskStatus::Failed)
-                                .exec_detail(Some(err_msg))
-                                .exec_end_ms(Some(now_ms().into()))
-                                ._current_user_id(user_id)
-                                .build();
-                            if let Err(e) = api_client.task_client.modify(&fail_dto).await {
-                                warn!("上报任务 {} 执行结果失败: {e:?}", task_id);
-                            }
+
+                        info!("高频任务 {} 执行完成: 共{}次", task_id, exec_count);
+
+                        if task.report_result {
+                            report_task_result(
+                                &api_client,
+                                U64::from(task_id),
+                                TaskStatus::Success,
+                                None,
+                                user_id,
+                                retry_count,
+                                retry_interval,
+                            )
+                            .await;
+                        }
+                    } else {
+                        // 普通任务：执行一次 → 标记开始 → 上报
+                        let exec_start_ms = now_ms();
+                        let start_dto = JobxTaskModifyDto::builder()
+                            .id(task_id.into())
+                            .exec_start_ms(Some(exec_start_ms.into()))
+                            ._current_user_id(user_id)
+                            .build();
+                        if let Err(e) = api_client.task_client.modify(&start_dto).await {
+                            warn!("标记任务 {} 开始执行失败: {e:?}", task_id);
+                        }
+
+                        let report_result = task.report_result;
+                        handler.handle(&task).await;
+
+                        if report_result {
+                            report_task_result(
+                                &api_client,
+                                U64::from(task_id),
+                                TaskStatus::Success,
+                                None,
+                                user_id,
+                                retry_count,
+                                retry_interval,
+                            )
+                            .await;
                         }
                     }
                 });
@@ -274,6 +326,49 @@ async fn run_worker_loop(
 
         if worker_config.scan_interval != ticker.period() {
             ticker = build_ticker(worker_config.scan_interval);
+        }
+    }
+}
+
+/// # 带重试的上报任务执行结果
+///
+/// 根据配置的重试次数和重试间隔，将任务执行结果上报到服务端。
+/// 重试耗尽后仍失败则仅记录告警日志，不再抛出错误。
+async fn report_task_result(
+    api_client: &Arc<JobxApiClient>,
+    task_id: U64,
+    status: TaskStatus,
+    exec_detail: Option<String>,
+    user_id: U64,
+    retry_count: u32,
+    retry_interval: Duration,
+) {
+    let dto = JobxTaskModifyDto::builder()
+        .id(task_id.into())
+        .status(status)
+        .exec_detail(exec_detail)
+        .exec_end_ms(Some(now_ms().into()))
+        ._current_user_id(user_id)
+        .build();
+
+    for attempt in 0..=retry_count {
+        match api_client.task_client.modify(&dto).await {
+            Ok(_) => return,
+            Err(e) if attempt < retry_count => {
+                warn!(
+                    "上报任务 {} 执行结果失败（第{}次重试）: {e:?}",
+                    task_id,
+                    attempt + 1
+                );
+                tokio::time::sleep(retry_interval).await;
+            }
+            Err(e) => {
+                warn!(
+                    "上报任务 {} 执行结果失败（已重试{}次）: {e:?}",
+                    task_id, retry_count,
+                );
+                return;
+            }
         }
     }
 }

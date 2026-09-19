@@ -25,6 +25,7 @@ create table jobx_job
     executor_code        varchar(50) not null  comment '执行器编码
              发布任务消息时的key将以此编码结尾，只有相同编码的执行器才订阅此key',
     assign_lead_ms bigint  comment '分派提前毫秒数',
+    report_result        bit(1) not null default true  comment '是否上报执行结果',
     next_assign_ms       bigint  comment '下次分派时间戳',
     remark               varchar(50)  comment '备注',
     enabled              bit(1) not null default true  comment '启用',
@@ -69,6 +70,7 @@ create table jobx_task
     valid_begin_ms       bigint  comment '有效开始时间戳',
     valid_end_ms         bigint  comment '有效结束时间戳',
     assign_lead_ms bigint  comment '分派提前毫秒数',
+    report_result        bit(1) not null default true  comment '是否上报执行结果',
     exec_detail          varchar(800)  comment '执行详情',
     exec_start_ms        bigint  comment '开始执行时间戳',
     exec_end_ms          bigint  comment '结束执行时间戳',
