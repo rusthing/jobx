@@ -27,3 +27,4 @@ redis = { workspace = true }
 wheel-rs = { workspace = true }
 robotech = { workspace = true, features = ["feign", "redis", "macros"] }
 jobx-api = { workspace = true }
+jobx-api-client = { workspace = true }

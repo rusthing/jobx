@@ -3,8 +3,13 @@ use crate::config::{
 };
 use async_trait::async_trait;
 use config::Value;
+use jobx_api::dic::{TaskStatus, TaskType};
 use jobx_api::vo::JobxJobVo;
+use jobx_api_client::api_client::{get_jobx_api_client, setup_jobx_api_client};
+use jobx_api_client::dto::{JobxTaskAddDto, JobxTaskModifyDto};
 use redis::Value as RedisValue;
+use robotech::api::U64;
+use robotech::api_client::ApiClientConfig;
 use robotech::cfg::CfgError;
 use robotech::env::{AppEnv, EnvError, APP_ENV};
 use robotech::redis::{ensure_consumer_group, read_from_stream};
@@ -13,7 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{info, warn};
 use wheel_rs::config_utils::has_config_changed;
-use wheel_rs::time_utils::build_ticker;
+use wheel_rs::time_utils::{build_ticker, now_ms};
 
 /// # 消息处理 trait
 ///
@@ -47,6 +52,7 @@ pub trait JobxMessageHandler: Send + Sync + 'static {
 
 pub async fn setup_jobx_worker(
     worker_config: JobxWorkerConfig,
+    apis_config: HashMap<String, ApiClientConfig>,
     changed: &Option<HashMap<String, Value>>,
     handler: Arc<dyn JobxMessageHandler>,
 ) -> Result<(), CfgError> {
@@ -57,6 +63,9 @@ pub async fn setup_jobx_worker(
         .unwrap_or(true)
     {
         set_jobx_worker_config(worker_config.clone());
+
+        // 初始化 API 客户端
+        setup_jobx_api_client(apis_config, changed).await?;
 
         // 如果是首次配置，启动扫描线程
         if changed.is_none() {
@@ -135,6 +144,7 @@ async fn run_worker_loop(
                 let stream_name = stream_key.key.clone();
                 tokio::spawn(async move {
                     info!("收到任务: stream={}, id={}", stream_name, stream_id.id);
+
                     let job = match extract_job_from_message(&stream_id.map) {
                         Ok(job) => job,
                         Err(e) => {
@@ -142,7 +152,102 @@ async fn run_worker_loop(
                             return;
                         }
                     };
-                    handler.handle(&job).await;
+
+                    let api_client = match get_jobx_api_client() {
+                        Ok(c) => c,
+                        Err(e) => {
+                            warn!("获取 API 客户端失败: {e:?}");
+                            return;
+                        }
+                    };
+                    let user_id = job.updator_id;
+
+                    // 创建任务记录
+                    let task_type = if job.next_assign_ms.is_some() {
+                        TaskType::Scheduled
+                    } else {
+                        TaskType::Immediate
+                    };
+                    let assign_ms = now_ms();
+                    let add_dto = JobxTaskAddDto::builder()
+                        .task_type(task_type)
+                        .job_id(Some(U64(job.id)))
+                        .assign_ms(U64(assign_ms))
+                        .scheduled_exec_start_ms(job.next_assign_ms.map(U64))
+                        .build();
+                    let task = match api_client.task_client.add(&add_dto, user_id).await {
+                        Ok(ro) => match ro.extra {
+                            Some(t) => t,
+                            None => {
+                                warn!("创建任务记录失败: 返回数据为空");
+                                return;
+                            }
+                        },
+                        Err(e) => {
+                            warn!("创建任务记录失败: {e:?}");
+                            return;
+                        }
+                    };
+                    let task_id = task.id;
+
+                    // 如果设定了预定执行时间，延迟到该时间再执行
+                    if let Some(scheduled_ms) = job.next_assign_ms {
+                        let now = now_ms();
+                        if scheduled_ms > now {
+                            let delay_ms = scheduled_ms - now;
+                            info!("任务 {} 延迟 {}ms 到预定时间再执行", task_id, delay_ms);
+                            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        }
+                    }
+
+                    // 标记任务开始执行
+                    let exec_start_ms = now_ms();
+                    let start_dto = JobxTaskModifyDto::builder()
+                        .id(U64(task_id))
+                        .exec_start_ms(Some(U64(exec_start_ms)))
+                        .build();
+                    if let Err(e) = api_client.task_client.modify(&start_dto, user_id).await {
+                        warn!("标记任务 {} 开始执行失败: {e:?}", task_id);
+                    }
+
+                    // 执行业务逻辑
+                    let handle_result =
+                        tokio::spawn(async move { handler.handle(&job).await }).await;
+
+                    // 上报执行结果
+                    match handle_result {
+                        Ok(()) => {
+                            info!("任务 {} 执行成功", task_id);
+                            let success_dto = JobxTaskModifyDto::builder()
+                                .id(U64(task_id))
+                                .status(TaskStatus::Success)
+                                .exec_end_ms(Some(U64(now_ms())))
+                                .build();
+                            if let Err(e) =
+                                api_client.task_client.modify(&success_dto, user_id).await
+                            {
+                                warn!("上报任务 {} 执行结果失败: {e:?}", task_id);
+                            }
+                        }
+                        Err(e) => {
+                            let err_msg = if e.is_panic() {
+                                "任务执行发生 panic".to_string()
+                            } else {
+                                "任务被取消".to_string()
+                            };
+                            warn!("任务 {} 执行失败: {}", task_id, err_msg);
+                            let fail_dto = JobxTaskModifyDto::builder()
+                                .id(U64(task_id))
+                                .status(TaskStatus::Failed)
+                                .exec_detail(Some(err_msg))
+                                .exec_end_ms(Some(U64(now_ms())))
+                                .build();
+                            if let Err(e) = api_client.task_client.modify(&fail_dto, user_id).await
+                            {
+                                warn!("上报任务 {} 执行结果失败: {e:?}", task_id);
+                            }
+                        }
+                    }
                 });
             }
         }
@@ -171,189 +276,3 @@ fn extract_job_from_message(fields: &HashMap<String, RedisValue>) -> Result<Jobx
 fn build_stream_key(executor_key: &str, executor_code: &str) -> String {
     format!("{}:{}", executor_key, executor_code)
 }
-
-// /// 构建包含用户 ID 的请求头
-// fn build_headers(user_id: u64) -> Result<HeaderMap, ApiClientError> {
-//     let mut headers = HeaderMap::new();
-//     headers.insert(
-//         "X-User-Id",
-//         HeaderValue::from_str(&user_id.to_string())
-//             .map_err(|e| ApiClientError::NotInit(format!("invalid user_id: {e}")))?,
-//     );
-//     Ok(headers)
-// }
-//
-// /// 创建 FeignApiClient 实例
-// ///
-// /// 内部使用 `ApiClientConfig::Simple` 直连模式连接 JobX 服务端。
-// pub async fn create_client(config: &JobxWorkerConfig) -> Result<FeignApiClient, ApiClientError> {
-//     let api_config = ApiClientConfig::Simple {
-//         base_url: config.base_url.clone(),
-//         auth: None,
-//     };
-//     Ok(FeignApiClient::new(api_config).await)
-// }
-//
-// /// # 根据 job executor_code 获取 job 信息
-// /// - client: HTTP 客户端
-// /// - user_id: 用户 ID
-// /// - code: 任务的计划编码（对应 `JobxJobDto.executor_code` 字段）
-// pub async fn get_job_by_code(
-//     client: &FeignApiClient,
-//     user_id: u64,
-//     code: &str,
-// ) -> Result<JobxJobVo, ApiClientError> {
-//     let params = serde_json::json!({ "executor_code": code });
-//     let headers = build_headers(user_id)?;
-//     let ro: Ro<JobxJobVo> = client
-//         .request(
-//             reqwest::Method::GET,
-//             "/jobx/jobx-job",
-//             Some(&params),
-//             None::<&serde_json::Value>,
-//             Some(&headers),
-//         )
-//         .await?;
-//
-//     ro.extra
-//         .ok_or_else(|| ApiClientError::NotInit(format!("job not found by code: {code}")))
-// }
-//
-// /// # 拉取指定 job 下所有待执行（状态为 Running）的任务
-// /// - client: HTTP 客户端
-// /// - user_id: 用户 ID
-// /// - executor_code: 任务的计划编码
-// pub async fn fetch_pending_tasks(
-//     client: &FeignApiClient,
-//     user_id: u64,
-//     executor_code: &str,
-// ) -> Result<Vec<JobxTaskVo>, ApiClientError> {
-//     let job = get_job_by_code(client, user_id, executor_code).await?;
-//     let job_id = job.id;
-//
-//     let params = serde_json::json!({
-//         "jobId": job_id,
-//         "status": 0,
-//     });
-//     let headers = build_headers(user_id)?;
-//     let ro: Ro<Vec<JobxTaskVo>> = client
-//         .request(
-//             reqwest::Method::GET,
-//             "/jobx/jobx-task/list",
-//             Some(&params),
-//             None::<&serde_json::Value>,
-//             Some(&headers),
-//         )
-//         .await?;
-//
-//     Ok(ro.extra.unwrap_or_default())
-// }
-//
-// /// # 拉取一个待执行的任务，没有则返回 `None`
-// /// - client: HTTP 客户端
-// /// - user_id: 用户 ID
-// /// - executor_code: 任务的计划编码
-// pub async fn fetch_one_pending_task(
-//     client: &FeignApiClient,
-//     user_id: u64,
-//     executor_code: &str,
-// ) -> Result<Option<JobxTaskVo>, ApiClientError> {
-//     let mut tasks = fetch_pending_tasks(client, user_id, executor_code).await?;
-//     Ok(if tasks.is_empty() {
-//         None
-//     } else {
-//         Some(tasks.remove(0))
-//     })
-// }
-//
-// /// # 标记任务开始执行
-// ///
-// /// 更新任务的 `exec_start_ms` 字段为当前时间戳。
-// /// - client: HTTP 客户端
-// /// - user_id: 用户 ID
-// /// - task_id: 任务 ID
-// pub async fn start_task(
-//     client: &FeignApiClient,
-//     user_id: u64,
-//     task_id: u64,
-// ) -> Result<(), ApiClientError> {
-//     let body = serde_json::json!({
-//         "id": task_id,
-//         "execStartTs": now_ms(),
-//     });
-//     let headers = build_headers(user_id)?;
-//     client
-//         .request::<serde_json::Value, Ro<JobxTaskVo>>(
-//             reqwest::Method::PUT,
-//             "/jobx/jobx-task",
-//             None::<&serde_json::Value>,
-//             Some(&body),
-//             Some(&headers),
-//         )
-//         .await?;
-//     Ok(())
-// }
-//
-// /// # 上报任务执行成功
-// ///
-// /// 更新任务的 `status` 为 Success（1），同时记录 `exec_detail` 和 `exec_end_ms`。
-// /// - client: HTTP 客户端
-// /// - user_id: 用户 ID
-// /// - task_id: 任务 ID
-// /// - exec_detail: 执行详情（可选）
-// pub async fn report_success(
-//     client: &FeignApiClient,
-//     user_id: u64,
-//     task_id: u64,
-//     exec_detail: Option<&str>,
-// ) -> Result<(), ApiClientError> {
-//     let body = serde_json::json!({
-//         "id": task_id,
-//         "status": 1,
-//         "execDetail": exec_detail,
-//         "execEndMs": now_ms(),
-//     });
-//     let headers = build_headers(user_id)?;
-//     client
-//         .request::<serde_json::Value, Ro<JobxTaskVo>>(
-//             reqwest::Method::PUT,
-//             "/jobx/jobx-task",
-//             None::<&serde_json::Value>,
-//             Some(&body),
-//             Some(&headers),
-//         )
-//         .await?;
-//     Ok(())
-// }
-//
-// /// # 上报任务执行失败
-// ///
-// /// 更新任务的 `status` 为 Failed（2），同时记录 `exec_detail` 和 `exec_end_ms`。
-// /// - client: HTTP 客户端
-// /// - user_id: 用户 ID
-// /// - task_id: 任务 ID
-// /// - exec_detail: 失败详情（错误信息）
-// pub async fn report_failure(
-//     client: &FeignApiClient,
-//     user_id: u64,
-//     task_id: u64,
-//     exec_detail: &str,
-// ) -> Result<(), ApiClientError> {
-//     let body = serde_json::json!({
-//         "id": task_id,
-//         "status": 2,
-//         "execDetail": exec_detail,
-//         "execEndMs": now_ms(),
-//     });
-//     let headers = build_headers(user_id)?;
-//     client
-//         .request::<serde_json::Value, Ro<JobxTaskVo>>(
-//             reqwest::Method::PUT,
-//             "/jobx/jobx-task",
-//             None::<&serde_json::Value>,
-//             Some(&body),
-//             Some(&headers),
-//         )
-//         .await?;
-//     Ok(())
-// }
