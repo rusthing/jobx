@@ -160,8 +160,7 @@ async fn run_worker_loop(
                             return;
                         }
                     };
-                    let user_id = job.updator_id;
-
+                    let user_id: U64 = job.updator_id.into();
                     // 创建任务记录
                     let task_type = if job.next_assign_ms.is_some() {
                         TaskType::Scheduled
@@ -176,7 +175,7 @@ async fn run_worker_loop(
                         .scheduled_exec_start_ms(job.next_assign_ms.map(Into::into))
                         ._current_user_id(user_id)
                         .build();
-                    let task = match api_client.task_client.add(&add_dto, user_id).await {
+                    let task = match api_client.task_client.add(&add_dto).await {
                         Ok(ro) => match ro.extra {
                             Some(t) => t,
                             None => {
@@ -207,8 +206,9 @@ async fn run_worker_loop(
                     let start_dto = JobxTaskModifyDto::builder()
                         .id(task_id.into())
                         .exec_start_ms(Some(exec_start_ms.into()))
+                        ._current_user_id(user_id)
                         .build();
-                    if let Err(e) = api_client.task_client.modify(&start_dto, user_id).await {
+                    if let Err(e) = api_client.task_client.modify(&start_dto).await {
                         warn!("标记任务 {} 开始执行失败: {e:?}", task_id);
                     }
 
@@ -224,9 +224,10 @@ async fn run_worker_loop(
                                 .id(task_id.into())
                                 .status(TaskStatus::Success)
                                 .exec_end_ms(Some(now_ms().into()))
+                                ._current_user_id(user_id)
                                 .build();
                             if let Err(e) =
-                                api_client.task_client.modify(&success_dto, user_id).await
+                                api_client.task_client.modify(&success_dto).await
                             {
                                 warn!("上报任务 {} 执行结果失败: {e:?}", task_id);
                             }
@@ -243,8 +244,9 @@ async fn run_worker_loop(
                                 .status(TaskStatus::Failed)
                                 .exec_detail(Some(err_msg))
                                 .exec_end_ms(Some(now_ms().into()))
+                                ._current_user_id(user_id)
                                 .build();
-                            if let Err(e) = api_client.task_client.modify(&fail_dto, user_id).await
+                            if let Err(e) = api_client.task_client.modify(&fail_dto).await
                             {
                                 warn!("上报任务 {} 执行结果失败: {e:?}", task_id);
                             }
