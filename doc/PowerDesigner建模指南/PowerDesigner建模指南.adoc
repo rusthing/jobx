@@ -33,7 +33,7 @@ image::Entity显示code3.png[Entity显示code3]
 +
 原: `AK_%.U18:AKEY%_%.U8:TABLE%`
 +
-改: `AK_%.U18:AKEY%_%.U30:TABLE%`
+改: `AK_%.U30:AKEY%_%.U30:TABLE%`
 
 [NOTE]
 ====
