@@ -21,6 +21,41 @@ use tracing::{info, warn};
 use wheel_rs::config_utils::has_config_changed;
 use wheel_rs::time_utils::{build_ticker, now_ms};
 
+/// 从 JobxJobVo 构建 JobxTaskAddDto
+///
+/// 将任务计划中的通用属性（executor_code、exec_params、job_type、cron 等）
+/// 映射到任务记录 DTO，避免在 worker 循环中重复手写属性赋值。
+fn build_task_add_dto(job: &JobxJobVo, instance_id: String, user_id: U64) -> JobxTaskAddDto {
+    let task_type = if job.next_assign_ms.is_some() {
+        TaskType::Scheduled
+    } else {
+        TaskType::Immediate
+    };
+
+    JobxTaskAddDto::builder()
+        .task_type(task_type)
+        .job_id(Some(job.id.into()))
+        .assign_ms(U64::from(now_ms()))
+        .scheduled_exec_start_ms(
+            job.next_assign_ms
+                .zip(job.assign_lead_ms)
+                .map(|(next_ms, lead_ms)| U64::from(u64::from(next_ms) + lead_ms)),
+        )
+        .executor_code(job.executor_code.clone())
+        .executor_instance(Some(instance_id))
+        .exec_params(job.params.clone())
+        .job_type(job.job_type)
+        .high_freq(job.high_freq)
+        .cron(job.cron.clone())
+        .interval_duration(job.interval_duration)
+        .valid_begin_ms(job.valid_begin_ms.map(|v| v.into()))
+        .valid_end_ms(job.valid_end_ms.map(|v| v.into()))
+        .assign_lead_ms(job.assign_lead_ms.map(U64::from))
+        .report_result(job.report_result)
+        ._current_user_id(user_id)
+        .build()
+}
+
 /// # 消息处理 trait
 ///
 /// Worker 从 Redis Stream 收到任务消息后，自动创建任务记录并反序列化为 `JobxTaskVo`，
@@ -163,35 +198,7 @@ async fn run_worker_loop(
                         }
                     };
                     let user_id: U64 = job.updator_id.into();
-                    // 创建任务记录
-                    let task_type = if job.next_assign_ms.is_some() {
-                        TaskType::Scheduled
-                    } else {
-                        TaskType::Immediate
-                    };
-                    let assign_ms = now_ms();
-                    let add_dto = JobxTaskAddDto::builder()
-                        .task_type(task_type)
-                        .job_id(Some(job.id.into()))
-                        .assign_ms(assign_ms.into())
-                        .scheduled_exec_start_ms(
-                            job.next_assign_ms
-                                .zip(job.assign_lead_ms)
-                                .map(|(next_ms, lead_ms)| U64::from(u64::from(next_ms) + lead_ms)),
-                        )
-                        .executor_code(job.executor_code.clone())
-                        .executor_instance(Some(instance_id))
-                        .exec_params(job.params.clone())
-                        .job_type(job.job_type)
-                        .high_freq(job.high_freq)
-                        .cron(job.cron.clone())
-                        .interval_duration(job.interval_duration)
-                        .valid_begin_ms(job.valid_begin_ms.map(|v| v.into()))
-                        .valid_end_ms(job.valid_end_ms.map(|v| v.into()))
-                        .assign_lead_ms(job.assign_lead_ms.map(U64::from))
-                        .report_result(job.report_result)
-                        ._current_user_id(user_id)
-                        .build();
+                    let add_dto = build_task_add_dto(&job, instance_id, user_id);
                     let task = match api_client.task_client.add(&add_dto).await {
                         Ok(ro) => match ro.extra {
                             Some(t) => t,
