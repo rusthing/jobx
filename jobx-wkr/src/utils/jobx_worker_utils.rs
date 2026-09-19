@@ -171,9 +171,10 @@ async fn run_worker_loop(
                     let assign_ms = now_ms();
                     let add_dto = JobxTaskAddDto::builder()
                         .task_type(task_type)
-                        .job_id(Some(U64(job.id)))
-                        .assign_ms(U64(assign_ms))
-                        .scheduled_exec_start_ms(job.next_assign_ms.map(U64))
+                        .job_id(Some(job.id.into()))
+                        .assign_ms(assign_ms.into())
+                        .scheduled_exec_start_ms(job.next_assign_ms.map(Into::into))
+                        ._current_user_id(user_id)
                         .build();
                     let task = match api_client.task_client.add(&add_dto, user_id).await {
                         Ok(ro) => match ro.extra {
@@ -192,6 +193,7 @@ async fn run_worker_loop(
 
                     // 如果设定了预定执行时间，延迟到该时间再执行
                     if let Some(scheduled_ms) = job.next_assign_ms {
+                        let scheduled_ms = U64::from(scheduled_ms).value();
                         let now = now_ms();
                         if scheduled_ms > now {
                             let delay_ms = scheduled_ms - now;
@@ -203,8 +205,8 @@ async fn run_worker_loop(
                     // 标记任务开始执行
                     let exec_start_ms = now_ms();
                     let start_dto = JobxTaskModifyDto::builder()
-                        .id(U64(task_id))
-                        .exec_start_ms(Some(U64(exec_start_ms)))
+                        .id(task_id.into())
+                        .exec_start_ms(Some(exec_start_ms.into()))
                         .build();
                     if let Err(e) = api_client.task_client.modify(&start_dto, user_id).await {
                         warn!("标记任务 {} 开始执行失败: {e:?}", task_id);
@@ -219,9 +221,9 @@ async fn run_worker_loop(
                         Ok(()) => {
                             info!("任务 {} 执行成功", task_id);
                             let success_dto = JobxTaskModifyDto::builder()
-                                .id(U64(task_id))
+                                .id(task_id.into())
                                 .status(TaskStatus::Success)
-                                .exec_end_ms(Some(U64(now_ms())))
+                                .exec_end_ms(Some(now_ms().into()))
                                 .build();
                             if let Err(e) =
                                 api_client.task_client.modify(&success_dto, user_id).await
@@ -237,10 +239,10 @@ async fn run_worker_loop(
                             };
                             warn!("任务 {} 执行失败: {}", task_id, err_msg);
                             let fail_dto = JobxTaskModifyDto::builder()
-                                .id(U64(task_id))
+                                .id(task_id.into())
                                 .status(TaskStatus::Failed)
                                 .exec_detail(Some(err_msg))
-                                .exec_end_ms(Some(U64(now_ms())))
+                                .exec_end_ms(Some(now_ms().into()))
                                 .build();
                             if let Err(e) = api_client.task_client.modify(&fail_dto, user_id).await
                             {
