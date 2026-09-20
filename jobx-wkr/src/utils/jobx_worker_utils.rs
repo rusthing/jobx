@@ -51,7 +51,6 @@ fn build_task_add_dto(job: &JobxJobVo, instance_id: String, user_id: U64) -> Job
         .valid_begin_ms(job.valid_begin_ms.map(|v| v.into()))
         .valid_end_ms(job.valid_end_ms.map(|v| v.into()))
         .assign_lead_ms(job.assign_lead_ms.map(U64::from))
-        .report_result(job.report_result)
         ._current_user_id(user_id)
         .build()
 }
@@ -233,11 +232,21 @@ async fn run_worker_loop(
                         .map(|c| (c.report_retry_count, c.report_retry_interval))
                         .unwrap_or((3, Duration::from_secs(1)));
 
+                    // 标记开始执行
+                    let exec_start_ms = now_ms();
+                    let start_dto = JobxTaskModifyDto::builder()
+                        .id(task_id.into())
+                        .exec_start_ms(Some(exec_start_ms.into()))
+                        ._current_user_id(user_id)
+                        .build();
+                    if let Err(e) = api_client.task_client.modify(&start_dto).await {
+                        warn!("标记任务 {} 开始执行失败: {e:?}", task_id);
+                    }
+
                     let is_high_freq = task.high_freq == Some(true);
 
-                    if is_high_freq {
-                        // 高频任务：按 plan_type 决定循环策略，到有效结束时间退出
-                        // 循环内不标记开始、不创建新记录，全部执行完后统一上报
+                    // 执行任务，收集状态和详情
+                    let (status, exec_detail) = if is_high_freq {
                         let interval_ms = task
                             .interval_duration
                             .as_ref()
@@ -245,7 +254,6 @@ async fn run_worker_loop(
                             .unwrap_or(1000);
                         let end_ms = task.valid_end_ms.map_or(u64::MAX, |v| u64::from(v));
                         let is_fixed_rate = task.job_type == JobType::FixedRate;
-                        let mut exec_count = 0u64;
 
                         let strategy_desc = if is_fixed_rate {
                             "固定频率"
@@ -257,26 +265,46 @@ async fn run_worker_loop(
                             task_id, strategy_desc, interval_ms, end_ms
                         );
 
+                        let task = Arc::new(task);
+                        let mut exec_details = Vec::new();
+                        let mut last_status = TaskStatus::Success;
+
                         loop {
                             let loop_start = now_ms();
                             if loop_start >= end_ms {
                                 break;
                             }
-                            exec_count += 1;
 
                             let h = Arc::clone(&handler);
-                            h.handle(&task).await;
+                            let t = Arc::clone(&task);
+                            let join_result =
+                                tokio::spawn(async move { h.handle(&t).await }).await;
+                            let elapsed = now_ms() - loop_start;
+
+                            match join_result {
+                                Ok(_) => {
+                                    exec_details.push(elapsed.to_string());
+                                    last_status = TaskStatus::Success;
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        "高频任务 {} 第{}次执行panic: {:?}",
+                                        task_id,
+                                        exec_details.len() + 1,
+                                        e,
+                                    );
+                                    exec_details.push(format!("{}(panic)", elapsed));
+                                    last_status = TaskStatus::Failed;
+                                }
+                            }
 
                             let sleep_ms = if is_fixed_rate {
-                                // 固定频率：从执行开始起算间隔
-                                let elapsed = now_ms() - loop_start;
                                 if elapsed < interval_ms {
                                     interval_ms - elapsed
                                 } else {
                                     0
                                 }
                             } else {
-                                // 固定延迟（Cron / FixedDelay）：执行完成后等待 interval_ms
                                 interval_ms
                             };
 
@@ -285,48 +313,38 @@ async fn run_worker_loop(
                             }
                         }
 
-                        info!("高频任务 {} 执行完成: 共{}次", task_id, exec_count);
-
-                        if task.report_result {
-                            report_task_result(
-                                &api_client,
-                                U64::from(task_id),
-                                TaskStatus::Success,
-                                None,
-                                user_id,
-                                retry_count,
-                                retry_interval,
-                            )
-                            .await;
-                        }
+                        info!(
+                            "高频任务 {} 执行完成: 共{}次",
+                            task_id,
+                            exec_details.len()
+                        );
+                        let detail =
+                            Some(format!("{}次: {}ms", exec_details.len(), exec_details.join(",")));
+                        let status = last_status;
+                        (status, detail)
                     } else {
-                        // 普通任务：执行一次 → 标记开始 → 上报
-                        let exec_start_ms = now_ms();
-                        let start_dto = JobxTaskModifyDto::builder()
-                            .id(task_id.into())
-                            .exec_start_ms(Some(exec_start_ms.into()))
-                            ._current_user_id(user_id)
-                            .build();
-                        if let Err(e) = api_client.task_client.modify(&start_dto).await {
-                            warn!("标记任务 {} 开始执行失败: {e:?}", task_id);
+                        let join_result =
+                            tokio::spawn(async move { handler.handle(&task).await }).await;
+                        match join_result {
+                            Ok(_) => (TaskStatus::Success, None),
+                            Err(e) => {
+                                warn!("任务 {} 执行panic: {:?}", task_id, e);
+                                (TaskStatus::Failed, Some(format!("panic: {e}")))
+                            }
                         }
+                    };
 
-                        let report_result = task.report_result;
-                        handler.handle(&task).await;
-
-                        if report_result {
-                            report_task_result(
-                                &api_client,
-                                U64::from(task_id),
-                                TaskStatus::Success,
-                                None,
-                                user_id,
-                                retry_count,
-                                retry_interval,
-                            )
-                            .await;
-                        }
-                    }
+                    // 统一上报
+                    report_task_result(
+                        &api_client,
+                        U64::from(task_id),
+                        status,
+                        exec_detail,
+                        user_id,
+                        retry_count,
+                        retry_interval,
+                    )
+                    .await;
                 });
             }
         }
