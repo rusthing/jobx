@@ -6,11 +6,11 @@ use crate::svc::JobxJobSvc;
 pub struct JobxTaskSvc;
 
 impl JobxTaskSvc {
-    /// # Worker 派发任务：创建 task + 推进 job 下次分派时间（同一事务）
+    /// # Worker 领取任务：创建 task + 推进 job 下次分派时间（同一事务）
     /// - add_dto: 任务新增 DTO（含 job_id）
     /// 返回新创建的任务视图对象。
     #[log_call]
-    pub async fn dispatch(
+    pub async fn take(
         add_dto: JobxTaskAddDto,
     ) -> Result<Ro<JobxTaskVo>, SvcError> {
         add_dto.validate()?;
@@ -33,6 +33,6 @@ impl JobxTaskSvc {
 
         txn.commit().await.map_err(|e| SvcError::Runtime(e.into()))?;
 
-        Ok(Ro::success("派发成功".to_string()).extra(Some(task_one)))
+        Ok(Ro::success("领取成功".to_string()).extra(Some(task_one)))
     }
 }

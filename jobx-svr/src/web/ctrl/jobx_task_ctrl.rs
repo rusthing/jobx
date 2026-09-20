@@ -5,11 +5,11 @@ struct JobxTaskCtrl;
 
 #[utoipa::path(
     post,
-    path = "/jobx/task/dispatch",
+    path = "/jobx/task/take",
     responses((status = OK, body = Ro<JobxTaskVo>))
 )]
 #[log_call]
-pub async fn dispatch(
+pub async fn take(
     headers: HeaderMap,
     Json(mut dto): Json<JobxTaskAddDto>,
 ) -> Result<Json<Ro<JobxTaskVo>>, CtrlError> {
@@ -17,6 +17,6 @@ pub async fn dispatch(
     if let Some(ms) = get_current_ms(&headers)? {
         dto._current_ms = Some(ms);
     }
-    let result = JobxTaskSvc::dispatch(dto).await?;
+    let result = JobxTaskSvc::take(dto).await?;
     Ok(Json(result))
 }

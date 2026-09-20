@@ -198,16 +198,16 @@ async fn run_worker_loop(
                     };
                     let user_id: U64 = job.updator_id.into();
                     let add_dto = build_task_add_dto(&job, instance_id, user_id);
-                    let task = match api_client.task_client.dispatch(&add_dto).await {
+                    let task = match api_client.task_client.take(&add_dto).await {
                         Ok(ro) => match ro.extra {
                             Some(t) => t,
                             None => {
-                                warn!("派发任务失败: 返回数据为空");
+                                warn!("领取任务失败: 返回数据为空");
                                 return;
                             }
                         },
                         Err(e) => {
-                            warn!("派发任务失败: {e:?}");
+                            warn!("领取任务失败: {e:?}");
                             return;
                         }
                     };

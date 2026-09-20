@@ -1,6 +1,6 @@
 use robotech::macros::router;
 
 #[router(crud, routes [
-    ("/jobx/task/dispatch", post(dispatch)),
+    ("/jobx/task/take", post(take)),
 ])]
 struct JobxTaskRouter;
