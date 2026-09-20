@@ -148,6 +148,81 @@ impl JobxJobSvc {
         }
     }
 
+    /// # 从旧分派时间往后推，计算下一次分派时间
+    /// 与 calc_job_schedule 的区别：
+    /// - calc_job_schedule 基于 now 算第一次分派，还会算 high_freq 标志
+    /// - 此函数基于旧的 next_assign_ms 往后推一个调度周期，只返回下一次分派时间
+    /// - 不触碰 high_freq，只关心"从 from_ms 开始后还有没有可分派的时间点"
+    /// - from_ms: 旧的 next_assign_ms（已经减过 lead 的）
+    fn calc_next_ms_after(
+        job_type: JobType,
+        cron: Option<String>,
+        interval_duration: Option<api::Duration>,
+        valid_begin_ms: Option<U64>,
+        valid_end_ms: Option<U64>,
+        assign_lead_ms: Option<U64>,
+        assign_lead_duration_default: Duration,
+        from_ms: U64,
+    ) -> Result<Option<U64>, SvcError> {
+        let assign_lead_ms = assign_lead_ms
+            .map(u64::from)
+            .unwrap_or(assign_lead_duration_default.as_millis() as u64);
+
+        let valid_begin_ms = valid_begin_ms.unwrap_or(U64(0));
+        let valid_end_ms = valid_end_ms.unwrap_or(U64::max());
+
+        match job_type {
+            JobType::Manual => Ok(None),
+
+            JobType::Cron => {
+                let cron = cron.ok_or_else(|| {
+                    validator::ValidationError::new("Cron类型的任务计划必须提供cron表达式")
+                })?;
+
+                let schedule = Schedule::from_str(&cron)
+                    .map_err(|_| validator::ValidationError::new("cron表达式解析失败"))?;
+
+                let from_exec_ms = u64::from(from_ms) + assign_lead_ms;
+                let begin_dt = Utc
+                    .timestamp_millis_opt(from_exec_ms as i64)
+                    .single()
+                    .ok_or_else(|| validator::ValidationError::new("时间戳无效"))?;
+
+                let next_exec = schedule.after(&begin_dt).next().ok_or_else(|| {
+                    validator::ValidationError::new("cron表达式无下一次执行时间")
+                })?;
+
+                let next_exec_ms: U64 = next_exec.timestamp_millis().into();
+
+                if next_exec_ms > valid_end_ms {
+                    return Ok(None);
+                }
+
+                let _ = valid_begin_ms;
+                let next_assign_ms: U64 = (next_exec_ms.value() - assign_lead_ms).into();
+                Ok(Some(next_assign_ms))
+            }
+
+            JobType::FixedDelay | JobType::FixedRate => {
+                let interval_duration = interval_duration.ok_or_else(|| {
+                    validator::ValidationError::new("固定间隔任务必须提供间隔时间")
+                })?;
+
+                let interval_ms = interval_duration.as_millis() as u64;
+                let from_exec_ms = u64::from(from_ms) + assign_lead_ms;
+                let next_exec_ms = from_exec_ms + interval_ms;
+
+                if next_exec_ms > u64::from(valid_end_ms) {
+                    return Ok(None);
+                }
+
+                let _ = valid_begin_ms;
+                let next_assign_ms: U64 = (next_exec_ms - assign_lead_ms).into();
+                Ok(Some(next_assign_ms))
+            }
+        }
+    }
+
     /// # 添加任务计划
     /// 校验输入参数、计算调度信息后，将任务计划写入数据库。
     /// - add_dto: 任务计划新增 DTO
@@ -224,54 +299,100 @@ impl JobxJobSvc {
             ..
         } = *get_jobx_scheduler_config()?;
 
-        // 只有任务计划相关字段有变更时才重新计算
-        let has_schedule_change = modify_dto.job_type.is_some()
-            || modify_dto.cron.is_some()
-            || modify_dto.interval_duration.is_some()
-            || modify_dto.valid_begin_ms.is_some()
-            || modify_dto.valid_end_ms.is_some()
-            || modify_dto.assign_lead_ms.is_some();
-        if has_schedule_change {
-            // 先从 DTO 取出已设置的调度字段值（在 into() 消费 DTO 之前）
-            // 注意：字符串字段需 clone 为自有值，避免借用冲突
-            let job_type = modify_dto.job_type;
-            let cron = modify_dto.cron.clone();
-            let interval_duration = modify_dto.interval_duration.clone();
-            let valid_begin_ms = modify_dto.valid_begin_ms.clone();
-            let valid_end_ms = modify_dto.valid_end_ms.clone();
-            let assign_lead_ms = modify_dto.assign_lead_ms.clone();
+        // next_assign_ms 是派生字段（基于调度参数和 now 计算），每次 modify 都需刷新
+        // 先从 DTO 取出已设置的调度字段值（在 into() 消费 DTO 之前）
+        let job_type = modify_dto.job_type;
+        let cron = modify_dto.cron.clone();
+        let interval_duration = modify_dto.interval_duration.clone();
+        let valid_begin_ms = modify_dto.valid_begin_ms.clone();
+        let valid_end_ms = modify_dto.valid_end_ms.clone();
+        let assign_lead_ms = modify_dto.assign_lead_ms.clone();
 
-            // 获取原记录以获取可能未在modify_dto中设置的字段
-            let existing = JobxJobDao::get_by_id::<_, JobxJobVo>(id, db)
-                .await?
-                .ok_or_else(|| SvcError::NotFound(id.to_string()))?;
+        // 获取原记录以获取可能未在modify_dto中设置的字段
+        let existing = JobxJobDao::get_by_id::<_, JobxJobVo>(id, db)
+            .await?
+            .ok_or_else(|| SvcError::NotFound(id.to_string()))?;
 
-            // 合并：优先使用DTO中的新值，否则使用数据库原值
-            let job_type = job_type.unwrap_or(existing.job_type);
-            let cron = cron.or(Some(existing.cron.clone()));
-            let interval_duration = interval_duration.or(Some(existing.interval_duration.clone()));
-            let valid_begin_ms = valid_begin_ms.or(Some(existing.valid_begin_ms.clone()));
-            let valid_end_ms = valid_end_ms.or(Some(existing.valid_end_ms.clone()));
-            let assign_lead_ms =
-                assign_lead_ms.or(Some(existing.assign_lead_ms.clone()));
+        // 合并：优先使用DTO中的新值，否则使用数据库原值
+        let job_type = job_type.unwrap_or(existing.job_type);
+        let cron = cron.or(Some(existing.cron.clone()));
+        let interval_duration = interval_duration.or(Some(existing.interval_duration.clone()));
+        let valid_begin_ms = valid_begin_ms.or(Some(existing.valid_begin_ms.clone()));
+        let valid_end_ms = valid_end_ms.or(Some(existing.valid_end_ms.clone()));
+        let assign_lead_ms =
+            assign_lead_ms.or(Some(existing.assign_lead_ms.clone()));
 
-            let (high_freq, next_assign_ms) = Self::calc_job_schedule(
-                job_type,
-                cron,
-                interval_duration,
-                valid_begin_ms,
-                valid_end_ms,
-                assign_lead_ms,
-                assign_lead_duration_default,
-                high_freq_threshold_duration,
-            )?;
-            modify_dto.high_freq = Some(high_freq);
-            modify_dto.next_assign_ms = Some(next_assign_ms);
-        }
+        let (high_freq, next_assign_ms) = Self::calc_job_schedule(
+            job_type,
+            cron,
+            interval_duration,
+            valid_begin_ms,
+            valid_end_ms,
+            assign_lead_ms,
+            assign_lead_duration_default,
+            high_freq_threshold_duration,
+        )?;
+        modify_dto.high_freq = Some(high_freq);
+        modify_dto.next_assign_ms = Some(next_assign_ms);
 
         let active_model: ActiveModel = modify_dto.into();
         let one = JobxJobVo::from(JobxJobDao::update(active_model, db).await?);
         Ok(Ro::success("修改成功".to_string()).extra(Some(one)))
+    }
+
+    /// # 刷新任务计划的下次分派时间
+    /// 基于 job 现有调度参数，以当前 next_assign_ms 为起点，往后推一个调度周期。
+    /// 只更新 next_assign_ms 和审计字段，不触碰 high_freq 等其他参数。
+    /// 用于 worker 成功接收任务后推进下次分派时间，与 modify 是两条独立路径。
+    #[db_unwrap(transaction_required)]
+    #[log_call]
+    pub async fn refresh_next_assign_ms<C>(
+        job_id: U64,
+        #[skip_log] db: Option<&C>,
+    ) -> Result<(), SvcError>
+    where
+        C: ConnectionTrait,
+    {
+        let existing = JobxJobDao::get_by_id::<_, JobxJobVo>(job_id, db)
+            .await?
+            .ok_or_else(|| SvcError::NotFound(job_id.to_string()))?;
+
+        let from_ms = existing
+            .next_assign_ms
+            .ok_or_else(|| SvcError::Runtime(anyhow::anyhow!("job.next_assign_ms 为空")))?;
+
+        let JobxSchedulerConfig {
+            assign_lead_duration: assign_lead_duration_default,
+            ..
+        } = *get_jobx_scheduler_config()?;
+
+        let next_assign_ms = Self::calc_next_ms_after(
+            existing.job_type,
+            existing.cron.clone(),
+            existing.interval_duration,
+            existing.valid_begin_ms,
+            existing.valid_end_ms,
+            existing.assign_lead_ms,
+            assign_lead_duration_default,
+            from_ms,
+        )?
+        .ok_or_else(|| {
+            SvcError::Runtime(anyhow::anyhow!("job 已过有效期，无法计算下次分派时间"))
+        })?;
+
+        use jobx_api::mo::jobx_job::ActiveModel;
+        use sea_orm::ActiveValue;
+
+        let active_model = ActiveModel {
+            id: ActiveValue::Set(job_id.into()),
+            next_assign_ms: ActiveValue::Set(Some(next_assign_ms.value() as i64)),
+            updator_id: ActiveValue::Set(existing.updator_id.value() as i64),
+            update_ms: ActiveValue::Set(now_ms() as i64),
+            ..Default::default()
+        };
+
+        JobxJobDao::update(active_model, db).await?;
+        Ok(())
     }
 
     /// # 扫描可发布任务并推送到 Redis Stream

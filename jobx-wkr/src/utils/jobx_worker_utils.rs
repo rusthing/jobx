@@ -198,19 +198,20 @@ async fn run_worker_loop(
                     };
                     let user_id: U64 = job.updator_id.into();
                     let add_dto = build_task_add_dto(&job, instance_id, user_id);
-                    let task = match api_client.task_client.add(&add_dto).await {
+                    let task = match api_client.task_client.dispatch(&add_dto).await {
                         Ok(ro) => match ro.extra {
                             Some(t) => t,
                             None => {
-                                warn!("创建任务记录失败: 返回数据为空");
+                                warn!("派发任务失败: 返回数据为空");
                                 return;
                             }
                         },
                         Err(e) => {
-                            warn!("创建任务记录失败: {e:?}");
+                            warn!("派发任务失败: {e:?}");
                             return;
                         }
                     };
+
                     let task_id = task.id;
 
                     // 如果设定了预定执行时间，延迟到该时间再执行

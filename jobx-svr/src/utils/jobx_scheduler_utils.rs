@@ -7,7 +7,6 @@ use config::Value;
 use sea_orm::DatabaseTransaction;
 use std::collections::HashMap;
 use std::time::Duration;
-use tokio::time::{interval, MissedTickBehavior};
 use tracing::{info, warn};
 use wheel_rs::config_utils::has_config_changed;
 use wheel_rs::time_utils::build_ticker;
