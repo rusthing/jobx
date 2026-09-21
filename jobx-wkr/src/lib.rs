@@ -1,16 +1,16 @@
-//! # JobX Worker Client Library
+//! # JobX Executor Client Library
 //!
-//! 为任务执行器（Worker）提供的简化工具函数，封装了与 JobX 服务端的 HTTP 通信，
+//! 为任务执行器（Executor）提供的简化工具函数，封装了与 JobX 服务端的 HTTP 通信，
 //! 提供拉取待执行任务、上报执行结果等常用操作。
 //!
 //! ## 使用示例
 //!
 //! ```no_run
-//! use jobx_wkr::{create_client, fetch_pending_tasks, start_task, report_success, JobxWorkerConfig};
+//! use jobx_wkr::{create_client, fetch_pending_tasks, start_task, report_success, JobxExecutorConfig};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let config = JobxWorkerConfig {
+//!     let config = JobxExecutorConfig {
 //!         base_url: "http://127.0.0.1:8080".to_string(),
 //!         user_id: 1,
 //!     };
@@ -35,5 +35,5 @@
 pub mod config;
 pub mod utils;
 
-pub use config::JobxWorkerConfig;
-pub use utils::{setup_jobx_worker, JobxMessageHandler};
+pub use config::JobxExecutorConfig;
+pub use utils::{setup_jobx_executor, JobxMessageHandler};

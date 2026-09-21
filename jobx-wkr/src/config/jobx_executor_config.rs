@@ -5,23 +5,23 @@ use std::sync::Arc;
 use std::time::Duration;
 use wheel_rs::serde::duration_serde;
 
-pub const JOBX_WORKER_CONFIG_KEY: &str = "jobx.worker";
-static JOBX_WORKER_CONFIG: ArcSwapOption<JobxWorkerConfig> = ArcSwapOption::const_empty();
+pub const JOBX_EXECUTOR_CONFIG_KEY: &str = "jobx.executor";
+static JOBX_EXECUTOR_CONFIG: ArcSwapOption<JobxExecutorConfig> = ArcSwapOption::const_empty();
 
-pub fn get_jobx_worker_config() -> Result<Arc<JobxWorkerConfig>, CfgError> {
-    JOBX_WORKER_CONFIG.load_full().ok_or(CfgError::NotInit(
-        "Worker config not initialized".to_string(),
+pub fn get_jobx_executor_config() -> Result<Arc<JobxExecutorConfig>, CfgError> {
+    JOBX_EXECUTOR_CONFIG.load_full().ok_or(CfgError::NotInit(
+        "Executor config not initialized".to_string(),
     ))
 }
 
-pub fn set_jobx_worker_config(config: JobxWorkerConfig) {
-    JOBX_WORKER_CONFIG.store(Some(Arc::new(config.clone())));
+pub fn set_jobx_executor_config(config: JobxExecutorConfig) {
+    JOBX_EXECUTOR_CONFIG.store(Some(Arc::new(config.clone())));
 }
 
-/// Worker 配置
+/// Executor 配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct JobxWorkerConfig {
+pub struct JobxExecutorConfig {
     /// Redis Stream 的 key的前缀，后面跟着任务执行器的编码
     #[serde(default = "executor_key_default")]
     pub executor_key: String,

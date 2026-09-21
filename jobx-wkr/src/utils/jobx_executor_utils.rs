@@ -1,5 +1,6 @@
 use crate::config::{
-    get_jobx_worker_config, set_jobx_worker_config, JobxWorkerConfig, JOBX_WORKER_CONFIG_KEY,
+    get_jobx_executor_config, set_jobx_executor_config, JobxExecutorConfig,
+    JOBX_EXECUTOR_CONFIG_KEY,
 };
 use async_trait::async_trait;
 use config::Value;
@@ -29,7 +30,7 @@ use wheel_rs::time_utils::{build_ticker, now_ms};
 /// 若 `job.next_assign_ms` 不为空表示这是计划执行任务（`TaskType::Scheduled`），
 /// 否则为立即执行任务（`TaskType::Immediate`）。
 ///
-/// 此函数在 worker 收到 Redis Stream 消息后被调用，构建出 DTO 后通过 API client
+/// 此函数在 executor 收到 Redis Stream 消息后被调用，构建出 DTO 后通过 API client
 /// 的 `take` 接口提交给服务端创建任务记录。集中在此处构建可避免在多处重复手写字段赋值。
 fn build_task_add_dto(job: &JobxJobVo, instance_id: String, user_id: U64) -> JobxTaskAddDto {
     let task_type = if job.next_assign_ms.is_some() {
@@ -63,7 +64,7 @@ fn build_task_add_dto(job: &JobxJobVo, instance_id: String, user_id: U64) -> Job
 
 /// # 消息处理 trait
 ///
-/// Worker 从 Redis Stream 收到任务消息后，自动创建任务记录并反序列化为 `JobxTaskVo`，
+/// Executor 从 Redis Stream 收到任务消息后，自动创建任务记录并反序列化为 `JobxTaskVo`，
 /// 并调用此 trait 进行处理。
 /// 下游客户端需实现此 trait 来完成实际的任务执行逻辑。
 ///
@@ -91,19 +92,19 @@ pub trait JobxMessageHandler: Send + Sync + 'static {
     async fn handle(&self, task: &JobxTaskVo);
 }
 
-pub async fn setup_jobx_worker(
-    worker_config: JobxWorkerConfig,
+pub async fn setup_jobx_executor(
+    executor_config: JobxExecutorConfig,
     apis_config: HashMap<String, ApiClientConfig>,
     changed: &Option<HashMap<String, Value>>,
     handler: Arc<dyn JobxMessageHandler>,
 ) -> Result<(), CfgError> {
-    info!("setup worker config...: {worker_config:?}");
+    info!("setup jobx executor config...: {executor_config:?}");
     if changed
         .as_ref()
-        .map(|changed| has_config_changed(JOBX_WORKER_CONFIG_KEY, changed))
+        .map(|changed| has_config_changed(JOBX_EXECUTOR_CONFIG_KEY, changed))
         .unwrap_or(true)
     {
-        set_jobx_worker_config(worker_config.clone());
+        set_jobx_executor_config(executor_config.clone());
 
         // 初始化 API 客户端
         setup_jobx_api_client(apis_config, changed).await?;
@@ -115,17 +116,19 @@ pub async fn setup_jobx_worker(
                 ..
             } = APP_ENV.get().ok_or(EnvError::GetAppEnv())?;
             // 确保消费者组存在
-            if let Some(executor_group) = &worker_config.executor_group {
-                let stream_key =
-                    build_stream_key(&worker_config.executor_key, &worker_config.executor_code);
+            if let Some(executor_group) = &executor_config.executor_group {
+                let stream_key = build_stream_key(
+                    &executor_config.executor_key,
+                    &executor_config.executor_code,
+                );
                 ensure_consumer_group(&stream_key, executor_group)
                     .await
                     .map_err(|e| CfgError::Init(e.to_string()))?;
             }
             // 启动扫描线程
-            tokio::spawn(run_worker_loop(
+            tokio::spawn(run_executor_loop(
                 app_instance_id.to_string(),
-                worker_config.scan_interval,
+                executor_config.scan_interval,
                 handler,
             ));
         }
@@ -139,7 +142,7 @@ pub async fn setup_jobx_worker(
 /// 收到消息后调用 `handler` 处理，每条消息独立处理，便于下游客户端实现具体业务逻辑。
 /// 运行期间会动态读取最新配置，若扫描间隔变更则自动调整 ticker。
 /// 该函数不会返回，需通过 `tokio::spawn` 在独立任务中运行。
-async fn run_worker_loop(
+async fn run_executor_loop(
     app_instance_id: String,
     initial_scan_interval: Duration,
     handler: Arc<dyn JobxMessageHandler>,
@@ -147,7 +150,7 @@ async fn run_worker_loop(
     let mut ticker = build_ticker(initial_scan_interval);
     loop {
         ticker.tick().await;
-        let worker_config = match get_jobx_worker_config() {
+        let executor_config = match get_jobx_executor_config() {
             Ok(c) => c,
             Err(e) => {
                 warn!("获取工作者配置失败: {e:?}");
@@ -155,17 +158,19 @@ async fn run_worker_loop(
                 continue;
             }
         };
-        let stream_key =
-            build_stream_key(&worker_config.executor_key, &worker_config.executor_code);
-        let group = worker_config
+        let stream_key = build_stream_key(
+            &executor_config.executor_key,
+            &executor_config.executor_code,
+        );
+        let group = executor_config
             .executor_group
             .as_ref()
             .map(|g| (g.as_str(), app_instance_id.as_str()));
-        let scan_block_duration = worker_config.scan_block_duration;
+        let scan_block_duration = executor_config.scan_block_duration;
         let reply = match read_from_stream(
             &stream_key,
             ">",
-            worker_config.max_messages,
+            executor_config.max_messages,
             Some(&scan_block_duration),
             group,
         )
@@ -233,7 +238,7 @@ async fn run_worker_loop(
                     }
 
                     // ---- 执行任务 ----
-                    let retry_config = get_jobx_worker_config().ok();
+                    let retry_config = get_jobx_executor_config().ok();
                     let (retry_count, retry_interval) = retry_config
                         .as_ref()
                         .map(|c| (c.report_retry_count, c.report_retry_interval))
@@ -284,8 +289,7 @@ async fn run_worker_loop(
 
                             let h = Arc::clone(&handler);
                             let t = Arc::clone(&task);
-                            let join_result =
-                                tokio::spawn(async move { h.handle(&t).await }).await;
+                            let join_result = tokio::spawn(async move { h.handle(&t).await }).await;
                             let elapsed = now_ms() - loop_start;
 
                             match join_result {
@@ -320,13 +324,12 @@ async fn run_worker_loop(
                             }
                         }
 
-                        info!(
-                            "高频任务 {} 执行完成: 共{}次",
-                            task_id,
-                            exec_details.len()
-                        );
-                        let detail =
-                            Some(format!("{}次: {}ms", exec_details.len(), exec_details.join(",")));
+                        info!("高频任务 {} 执行完成: 共{}次", task_id, exec_details.len());
+                        let detail = Some(format!(
+                            "{}次: {}ms",
+                            exec_details.len(),
+                            exec_details.join(",")
+                        ));
                         let status = last_status;
                         (status, detail)
                     } else {
@@ -356,8 +359,8 @@ async fn run_worker_loop(
             }
         }
 
-        if worker_config.scan_interval != ticker.period() {
-            ticker = build_ticker(worker_config.scan_interval);
+        if executor_config.scan_interval != ticker.period() {
+            ticker = build_ticker(executor_config.scan_interval);
         }
     }
 }

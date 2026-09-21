@@ -15,7 +15,7 @@ pub fn setup_jobx_scheduler(
     schedule_config: JobxSchedulerConfig,
     changed: &Option<HashMap<String, Value>>,
 ) {
-    info!("setup scheduler config...: {schedule_config:?}");
+    info!("setup jobx scheduler config...: {schedule_config:?}");
     if changed
         .as_ref()
         .map(|changed| has_config_changed(JOBX_SCHEDULER_CONFIG_KEY, changed))
