@@ -17,6 +17,6 @@ pub async fn take(
     if let Some(ms) = get_current_ms(&headers)? {
         dto._current_ms = Some(ms);
     }
-    let result = JobxTaskSvc::take(dto).await?;
+    let result = JobxTaskSvc::take::<DatabaseTransaction>(dto, None).await?;
     Ok(Json(result))
 }
