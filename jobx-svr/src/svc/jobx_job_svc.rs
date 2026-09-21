@@ -25,8 +25,8 @@ impl JobxJobSvc {
     ///
     /// 计算逻辑：
     /// - Cron：根据 cron 表达式计算下一次执行时间，再减去分派提前量
-    /// - FixedDelay / FixedRate：`after_ms + interval_duration` 作为下一次执行时间，
-    ///   再减去分派提前量
+    /// - FixedDelay / FixedRate：以 `after_ms` 作为下一次执行时间（不在此处加 `interval_duration`；
+    ///   `add` 流程保证新增任务立即分派，间隔推进由 `recalc_next_assign_ms` 在调用前完成）
     ///
     /// ## 参数
     ///
@@ -112,6 +112,8 @@ impl JobxJobSvc {
                     validator::ValidationError::new("固定间隔任务必须提供间隔时间")
                 })?;
 
+                // add 流程中 after_ms = max(valid_begin_ms, now_ms)，此时不应加 interval，
+                // 以保证新增任务立即被分派。interval 的推进由 recalc_next_assign_ms 在调用前完成。
                 let next_exec_ms = after_ms;
                 let is_high_freq_task =
                     interval_duration.as_duration() < high_freq_threshold_duration;
@@ -343,8 +345,13 @@ impl JobxJobSvc {
     /// Worker 在成功领取任务后调用，以当前 `next_assign_ms` 为起点向后推一个调度周期。
     /// 仅更新 `next_assign_ms` 和审计字段，不触碰 `high_freq` 等其他参数。
     ///
-    /// **注意**：此方法适用于非高频任务。高频任务的分派时间在日常调度中由
-    /// `scan_and_publish` 的窗口查询自然覆盖，无需单独推进。
+    /// ## 推进策略
+    ///
+    /// 在调用 `calc_next_assign` 之前先根据任务类型对起始时间 (`after_ms`) 做预偏移：
+    /// - **高频任务**：`next_assign_ms + high_freq_assign_interval`（避免高频任务过于密集地重新分派）
+    /// - **普通任务**：`next_assign_ms + assign_lead_ms + interval_duration`
+    ///   - `assign_lead_ms` 与 `calc_next_assign` 末尾的减法抵消，使计算基准对齐执行时间点
+    ///   - `interval_duration` 使 FixedDelay/FixedRate 任务真正向前推进（Cron 为 0，不影响）
     ///
     /// ## 参数
     ///
@@ -367,7 +374,26 @@ impl JobxJobSvc {
             None
         } else {
             let after_ms = if let Some(next_assign_ms) = existing.next_assign_ms {
-                next_assign_ms.value()
+                let JobxSchedulerConfig {
+                    high_freq_assign_interval,
+                    assign_lead_duration: assign_lead_duration_default,
+                    ..
+                } = *get_jobx_scheduler_config()?;
+                if existing.high_freq.unwrap_or(false) {
+                    next_assign_ms.value() + high_freq_assign_interval.as_millis() as u64
+                } else {
+                    let lead_ms = existing
+                        .assign_lead_ms
+                        .map(|v| v.value())
+                        .unwrap_or(assign_lead_duration_default.as_millis() as u64);
+                    let interval_duration_ms = existing
+                        .interval_duration
+                        .as_ref()
+                        .map(|d| d.as_duration())
+                        .unwrap_or_default()
+                        .as_millis() as u64;
+                    next_assign_ms.value() + lead_ms + interval_duration_ms
+                }
             } else {
                 return Ok(());
             };
