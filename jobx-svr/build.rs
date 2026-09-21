@@ -24,37 +24,21 @@ fn main() {
     //     "cargo:warning=PROJECT_ROOT: {project_root:?} OUT_DIR: {out_dir} dest_path: {dest_dir_path:?}"
     // );
 
-    // 复制应用的配置文件到输出目录
-    let mut file_name = env!("CARGO_PKG_NAME");
-    for ext in ["toml", "json", "json5", "yml", "yaml", "ini", "ron"] {
-        copy_file(project_root, file_name, ext, dest_dir_path);
-    }
+    const CONFIG_EXTS: &[&str] = &["toml", "json", "json5", "yml", "yaml", "ini", "ron"];
 
-    // 复制开发的配置文件到输出目录
-    let tmp_file_name = format!("{}-dev", file_name);
-    file_name = tmp_file_name.as_str();
-    for ext in ["toml", "json", "json5", "yml", "yaml", "ini", "ron"] {
-        copy_file(project_root, file_name, ext, dest_dir_path);
-    }
+    let pkg_name = env!("CARGO_PKG_NAME");
 
-    // 复制开发的配置文件到输出目录
-    let tmp_file_name = format!("{}-test", file_name);
-    file_name = tmp_file_name.as_str();
-    for ext in ["toml", "json", "json5", "yml", "yaml", "ini", "ron"] {
-        copy_file(project_root, file_name, ext, dest_dir_path);
-    }
-
-    // 复制生产的配置文件到输出目录
-    let tmp_file_name = format!("{}-prod", file_name);
-    file_name = tmp_file_name.as_str();
-    for ext in ["toml", "json", "json5", "yml", "yaml", "ini", "ron"] {
-        copy_file(project_root, file_name, ext, dest_dir_path);
+    // 复制应用及其环境配置文件到输出目录
+    for suffix in ["", "-dev", "-test", "-prod"] {
+        let file_name = format!("{pkg_name}{suffix}");
+        for ext in CONFIG_EXTS {
+            copy_file(project_root, &file_name, ext, dest_dir_path);
+        }
     }
 
     // 复制日志的配置文件到输出目录
-    file_name = "log";
-    for ext in ["toml", "json", "json5", "yml", "yaml", "ini", "ron"] {
-        copy_file(project_root, file_name, ext, dest_dir_path);
+    for ext in CONFIG_EXTS {
+        copy_file(project_root, "log", ext, dest_dir_path);
     }
 
     // 复制数据库升级目录到输出目录
@@ -98,7 +82,7 @@ fn copy_dir_recursive(src_path: &Path, dest_path: &Path) {
 
 /// 复制指定扩展名的配置文件到输出目录
 ///
-/// 该函数会查找与当前包同名的配置文件（如 `oss-svr.toml`），
+/// 该函数会查找与指定文件名同名的配置文件（如 `jobx-svr.toml`），
 /// 并将其从项目根目录复制到构建输出目录中。
 ///
 /// # 参数
