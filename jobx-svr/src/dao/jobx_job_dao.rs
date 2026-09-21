@@ -20,6 +20,18 @@ use sea_orm::ExprTrait;
 pub struct JobxJobDao;
 
 impl JobxJobDao {
+    /// # 查询可发布的任务计划
+    ///
+    /// 在指定的时间窗口内查找已启用、非 Manual 类型且 `next_assign_ms` 落在 `[begin, end]`
+    /// 范围内的任务计划。同时通过 NOT EXISTS 子查询排除已生成过任务的记录，确保幂等性：
+    /// 若某个 job 的同一 `next_assign_ms` 时间点已经生成了对应的 task 记录，则不再重复发布。
+    ///
+    /// ## 参数
+    ///
+    /// * `begin` - 分派时间窗口起始时间戳
+    /// * `end` - 分派时间窗口结束时间戳
+    /// * `now` - 当前时间戳，用于校验 `valid_begin_ms <= now <= valid_end_ms`
+    /// * `db` - 数据库连接
     pub async fn list_publishable<C>(
         begin: i64,
         end: i64,

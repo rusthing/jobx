@@ -18,23 +18,32 @@ use wheel_rs::time_utils::now_ms;
 pub struct JobxJobSvc;
 
 impl JobxJobSvc {
-    /// # 计算下一次执行时间（核心共享逻辑）
+    /// # 计算下一次分派时间（核心共享逻辑）
     ///
-    /// 根据任务类型，从起始执行时间戳开始计算下一次执行时间戳。
+    /// 根据任务类型，从起始时间戳开始计算下一次分派时间戳（即提前于执行时间的分派时间）。
     /// Manual 返回 `None`。超过有效结束时间也返回 `None`。
+    ///
+    /// 计算逻辑：
+    /// - Cron：根据 cron 表达式计算下一次执行时间，再减去分派提前量
+    /// - FixedDelay / FixedRate：`after_ms + interval_duration` 作为下一次执行时间，
+    ///   再减去分派提前量
     ///
     /// ## 参数
     ///
     /// * `job_type` - 任务类型（Cron / FixedDelay / FixedRate / Manual）。
     /// * `cron` - Cron 表达式，Cron 类型时必填。
     /// * `interval_duration` - 固定间隔时长，FixedDelay / FixedRate 时必填。
+    /// * `valid_begin_ms` - 有效开始时间戳，None 表示从 0 开始。
     /// * `valid_end_ms` - 有效结束时间戳，None 表示无上限。
-    /// * `from_exec_ms` - 起始执行时间戳（毫秒），从此时间之后查找下一次执行。
+    /// * `assign_lead_ms` - 分派提前毫秒数，用于提前分派任务。
+    /// * `after_ms` - 起始时间戳（毫秒），用于计算下一次分派时间。
+    ///   - 新增时：传入当前时间 `now_ms`
+    ///   - 重新计算时：传入上一次的 `next_assign_ms`
     ///
     /// ## 返回值
     ///
-    /// * `Ok(Some(u64))` — 下一次执行时间戳（毫秒）。
-    /// * `Ok(None)` — Manual 类型，或无下一次（已超出有效期）。
+    /// * `Ok((Some(u64), bool))` — 下一次分派时间戳（毫秒）、是否高频任务。
+    /// * `Ok((None, false))` — Manual 类型，或无下一次（已超出有效期）。
     /// * `Err` — 参数校验失败。
     fn calc_next_assign(
         job_type: JobType,
@@ -129,21 +138,25 @@ impl JobxJobSvc {
     /// 根据任务类型、cron 表达式或固定间隔、有效时间范围，计算下一次分派时间戳及是否为高频任务。
     /// Manual 类型不参与调度。
     ///
-    /// ## 参数
+    /// ## 参数（使用双层 Option 语义）
+    ///
+    /// 各参数外层 `Option` 表示"该字段是否存在于 modify DTO 中"（来自 `Option<Option<T>>` 的 flatten），
+    /// 内层 `Option` 表示字段的实际值（`None` 即设为 null）。此设计用于区分"DTO 中未传此字段"
+    /// 和"DTO 中显式设置为 null"两种语义：
+    /// - `Some(Some(v))`：DTO 中设置为具体值 `v`
+    /// - `Some(None)`：DTO 中显式设置为 null
+    /// - `None`：DTO 中未包含此字段，需从数据库原值合并
     ///
     /// * `job_type` - 任务类型（Manual / Cron / FixedDelay / FixedRate）。
     /// * `cron` - Cron 表达式，Cron 类型必填。
     /// * `interval_duration` - 固定间隔时长，FixedDelay / FixedRate 类型必填。
     /// * `valid_begin_ms` - 有效开始时间戳，None 表示从 0 开始。
     /// * `valid_end_ms` - 有效结束时间戳，None 表示无上限。
-    /// * `assign_lead_ms` - 分派提前毫秒数，None 时使用 `assign_lead_duration_default`。
-    /// * `assign_lead_duration_default` - 默认分派提前时长。
-    /// * `high_freq_threshold_duration` - 高频阈值，任务间隔低于此值视为高频任务。
+    /// * `assign_lead_ms` - 分派提前毫秒数，None 时使用配置默认值。
     ///
     /// ## 返回值
     ///
-    /// * `(Option<bool>, Option<U64>)` — 是否高频任务、下次分派时间戳。
-    ///   Manual 类型返回 `(None, None)`。
+    /// * `(Option<u64>, bool)` — 下次分派时间戳、是否高频任务。
     fn calc_job_schedule(
         job_type: JobType,
         cron: Option<Option<String>>,
@@ -327,9 +340,11 @@ impl JobxJobSvc {
 
     /// # 刷新任务计划的下次分派时间
     ///
-    /// 基于 job 现有调度参数，以当前 `next_assign_ms` 为起点，往后推一个调度周期。
-    /// 只更新 `next_assign_ms` 和审计字段，不触碰 `high_freq` 等其他参数。
-    /// 用于 worker 成功接收任务后推进下次分派时间，与 `modify` 是两条独立路径。
+    /// Worker 在成功领取任务后调用，以当前 `next_assign_ms` 为起点向后推一个调度周期。
+    /// 仅更新 `next_assign_ms` 和审计字段，不触碰 `high_freq` 等其他参数。
+    ///
+    /// **注意**：此方法适用于非高频任务。高频任务的分派时间在日常调度中由
+    /// `scan_and_publish` 的窗口查询自然覆盖，无需单独推进。
     ///
     /// ## 参数
     ///

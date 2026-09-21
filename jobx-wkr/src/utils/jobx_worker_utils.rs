@@ -21,10 +21,16 @@ use tracing::{info, warn};
 use wheel_rs::config_utils::has_config_changed;
 use wheel_rs::time_utils::{build_ticker, now_ms};
 
-/// 从 JobxJobVo 构建 JobxTaskAddDto
+/// 从 `JobxJobVo` 构建 `JobxTaskAddDto`
 ///
-/// 将任务计划中的通用属性（executor_code、exec_params、job_type、cron 等）
-/// 映射到任务记录 DTO，避免在 worker 循环中重复手写属性赋值。
+/// 将任务计划中的通用属性（`executor_code`、`exec_params`、`job_type`、`cron`、
+/// `interval_duration` 等）映射到任务记录 DTO 中。
+///
+/// 若 `job.next_assign_ms` 不为空表示这是计划执行任务（`TaskType::Scheduled`），
+/// 否则为立即执行任务（`TaskType::Immediate`）。
+///
+/// 此函数在 worker 收到 Redis Stream 消息后被调用，构建出 DTO 后通过 API client
+/// 的 `take` 接口提交给服务端创建任务记录。集中在此处构建可避免在多处重复手写字段赋值。
 fn build_task_add_dto(job: &JobxJobVo, instance_id: String, user_id: U64) -> JobxTaskAddDto {
     let task_type = if job.next_assign_ms.is_some() {
         TaskType::Scheduled
