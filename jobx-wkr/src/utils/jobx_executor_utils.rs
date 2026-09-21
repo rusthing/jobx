@@ -278,7 +278,14 @@ async fn run_executor_loop(
                         );
 
                         let task = Arc::new(task);
-                        let mut exec_details = Vec::new();
+                        let mut total_count: u64 = 0;
+                        let mut success_count: u64 = 0;
+                        let mut fail_count: u64 = 0;
+                        let mut min_elapsed: u64 = u64::MAX;
+                        let mut max_elapsed: u64 = 0;
+                        let mut total_elapsed: u64 = 0;
+                        let mut first_elapsed: Option<u64> = None;
+                        let mut last_elapsed: u64 = 0;
                         let mut last_status = TaskStatus::Success;
 
                         loop {
@@ -292,19 +299,32 @@ async fn run_executor_loop(
                             let join_result = tokio::spawn(async move { h.handle(&t).await }).await;
                             let elapsed = now_ms() - loop_start;
 
+                            total_count += 1;
+                            total_elapsed += elapsed;
+                            if elapsed < min_elapsed {
+                                min_elapsed = elapsed;
+                            }
+                            if elapsed > max_elapsed {
+                                max_elapsed = elapsed;
+                            }
+                            if first_elapsed.is_none() {
+                                first_elapsed = Some(elapsed);
+                            }
+                            last_elapsed = elapsed;
+
                             match join_result {
                                 Ok(_) => {
-                                    exec_details.push(elapsed.to_string());
+                                    success_count += 1;
                                     last_status = TaskStatus::Success;
                                 }
                                 Err(e) => {
+                                    fail_count += 1;
                                     warn!(
                                         "高频任务 {} 第{}次执行panic: {:?}",
                                         task_id,
-                                        exec_details.len() + 1,
+                                        total_count,
                                         e,
                                     );
-                                    exec_details.push(format!("{}(panic)", elapsed));
                                     last_status = TaskStatus::Failed;
                                 }
                             }
@@ -324,11 +344,36 @@ async fn run_executor_loop(
                             }
                         }
 
-                        info!("高频任务 {} 执行完成: 共{}次", task_id, exec_details.len());
+                        let avg_elapsed = if total_count > 0 {
+                            total_elapsed / total_count
+                        } else {
+                            0
+                        };
+
+                        info!(
+                            "高频任务 {} 执行完成: 共{}次 成功{} 失败{} | \
+                             min={}ms max={}ms avg={}ms | 首次={}ms 末次={}ms",
+                            task_id,
+                            total_count,
+                            success_count,
+                            fail_count,
+                            min_elapsed,
+                            max_elapsed,
+                            avg_elapsed,
+                            first_elapsed.unwrap_or(0),
+                            last_elapsed,
+                        );
+
                         let detail = Some(format!(
-                            "{}次: {}ms",
-                            exec_details.len(),
-                            exec_details.join(",")
+                            "共{}次 成功{} 失败{} | min={}ms max={}ms avg={}ms | 首次={}ms 末次={}ms",
+                            total_count,
+                            success_count,
+                            fail_count,
+                            min_elapsed,
+                            max_elapsed,
+                            avg_elapsed,
+                            first_elapsed.unwrap_or(0),
+                            last_elapsed,
                         ));
                         let status = last_status;
                         (status, detail)
