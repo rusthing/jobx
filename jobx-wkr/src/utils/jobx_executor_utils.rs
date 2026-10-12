@@ -93,12 +93,12 @@ fn build_task_add_dto(job: &JobxJobVo, instance_id: String, user_id: U64) -> Job
 /// ```no_run
 /// use async_trait::async_trait;
 /// use jobx_api::vo::JobxTaskVo;
-/// use jobx_wkr::JobxMessageHandler;
+/// use jobx_wkr::JobxTaskHandler;
 ///
 /// struct MyHandler;
 ///
 /// #[async_trait]
-/// impl JobxMessageHandler for MyHandler {
+/// impl JobxTaskHandler for MyHandler {
 ///     async fn handle(&self, task: &JobxTaskVo) {
 ///         // task 包含任务的所有信息：executor_code、exec_params、job_type、task_id 等
 ///         // 下游客户端根据 task 信息执行具体业务逻辑
@@ -106,7 +106,7 @@ fn build_task_add_dto(job: &JobxJobVo, instance_id: String, user_id: U64) -> Job
 /// }
 /// ```
 #[async_trait]
-pub trait JobxMessageHandler: Send + Sync + 'static {
+pub trait JobxTaskHandler: Send + Sync + 'static {
     /// 处理任务
     /// - task: 任务视图对象，包含 executor_code、exec_params、job_type、task_id 等完整字段
     async fn handle(&self, task: &JobxTaskVo);
@@ -114,7 +114,7 @@ pub trait JobxMessageHandler: Send + Sync + 'static {
 
 pub async fn init_jobx_executor(
     executor_config: JobxExecutorConfig,
-    handler: Arc<dyn JobxMessageHandler>,
+    handler: Arc<dyn JobxTaskHandler>,
 ) -> Result<(), CfgError> {
     info!("setup jobx executor config...: {executor_config:?}");
     set_jobx_executor_config(executor_config.clone());
@@ -152,7 +152,7 @@ async fn run_executor_loop(
     app_instance_id: String,
     executor_code: String,
     initial_scan_interval: Duration,
-    handler: Arc<dyn JobxMessageHandler>,
+    handler: Arc<dyn JobxTaskHandler>,
 ) {
     let mut ticker = build_ticker(initial_scan_interval);
     loop {
