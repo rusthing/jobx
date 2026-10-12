@@ -35,5 +35,5 @@
 pub mod config;
 pub mod utils;
 
-pub use config::JobxExecutorConfig;
-pub use utils::{setup_jobx_executor, JobxMessageHandler};
+pub use config::*;
+pub use utils::*;

@@ -1,26 +1,46 @@
-use crate::config::{
-    get_jobx_executor_config, set_jobx_executor_config, JobxExecutorConfig,
-    JOBX_EXECUTOR_CONFIG_KEY,
-};
+use crate::config::JobxExecutorConfig;
+use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
-use config::Value;
 use jobx_api::dic::{JobType, TaskStatus, TaskType};
 use jobx_api::vo::{JobxJobVo, JobxTaskVo};
-use jobx_api_client::api_client::{get_jobx_api_client, setup_jobx_api_client, JobxApiClient};
+use jobx_api_client::api_client::{JobxApiClient, get_jobx_api_client};
 use jobx_api_client::dto::{JobxTaskAddDto, JobxTaskModifyDto};
 use redis::Value as RedisValue;
 use robotech::api::U64;
-use robotech::api_client::ApiClientConfig;
 use robotech::cfg::CfgError;
-use robotech::env::{AppEnv, EnvError, APP_ENV};
+use robotech::env::{APP_ENV, AppEnv, EnvError};
 use robotech::redis::{ensure_consumer_group, read_from_stream};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::Instant;
 use tracing::{info, warn};
-use wheel_rs::config_utils::has_config_changed;
 use wheel_rs::time_utils::{build_ticker, now_ms};
+
+static JOBX_EXECUTOR_CONFIGS: ArcSwapOption<HashMap<String, Arc<JobxExecutorConfig>>> =
+    ArcSwapOption::const_empty();
+
+pub fn get_jobx_executor_config(executor_code: &str) -> Result<Arc<JobxExecutorConfig>, CfgError> {
+    let configs = JOBX_EXECUTOR_CONFIGS
+        .load_full()
+        .ok_or_else(|| CfgError::NotInit("Executor config not initialized".to_string()))?;
+    configs
+        .get(executor_code)
+        .cloned()
+        .ok_or_else(|| CfgError::NotInit(format!("Executor config not found for: {executor_code}")))
+}
+
+pub fn set_jobx_executor_config(config: JobxExecutorConfig) {
+    let code = config.executor_code.clone();
+    JOBX_EXECUTOR_CONFIGS.rcu(|current| {
+        let mut new_configs = match current {
+            Some(existing) => (**existing).clone(),
+            None => HashMap::new(),
+        };
+        new_configs.insert(code.clone(), Arc::new(config.clone()));
+        Some(Arc::new(new_configs))
+    });
+}
 
 /// 从 `JobxJobVo` 构建 `JobxTaskAddDto`
 ///
@@ -92,47 +112,33 @@ pub trait JobxMessageHandler: Send + Sync + 'static {
     async fn handle(&self, task: &JobxTaskVo);
 }
 
-pub async fn setup_jobx_executor(
+pub async fn init_jobx_executor(
     executor_config: JobxExecutorConfig,
-    apis_config: HashMap<String, ApiClientConfig>,
-    changed: &Option<HashMap<String, Value>>,
     handler: Arc<dyn JobxMessageHandler>,
 ) -> Result<(), CfgError> {
     info!("setup jobx executor config...: {executor_config:?}");
-    if changed
-        .as_ref()
-        .map(|changed| has_config_changed(JOBX_EXECUTOR_CONFIG_KEY, changed))
-        .unwrap_or(true)
-    {
-        set_jobx_executor_config(executor_config.clone());
-
-        // 初始化 API 客户端
-        setup_jobx_api_client(apis_config, changed).await?;
-
-        // 如果是首次配置，启动扫描线程
-        if changed.is_none() {
-            let AppEnv {
-                instance_id: app_instance_id,
-                ..
-            } = APP_ENV.get().ok_or(EnvError::GetAppEnv())?;
-            // 确保消费者组存在
-            if let Some(executor_group) = &executor_config.executor_group {
-                let stream_key = build_stream_key(
-                    &executor_config.executor_key,
-                    &executor_config.executor_code,
-                );
-                ensure_consumer_group(&stream_key, executor_group)
-                    .await
-                    .map_err(|e| CfgError::Init(e.to_string()))?;
-            }
-            // 启动扫描线程
-            tokio::spawn(run_executor_loop(
-                app_instance_id.to_string(),
-                executor_config.scan_interval,
-                handler,
-            ));
-        }
+    set_jobx_executor_config(executor_config.clone());
+    let AppEnv {
+        instance_id: app_instance_id,
+        ..
+    } = APP_ENV.get().ok_or(EnvError::GetAppEnv())?;
+    // 确保消费者组存在
+    if let Some(executor_group) = &executor_config.executor_group {
+        let stream_key = build_stream_key(
+            &executor_config.executor_key,
+            &executor_config.executor_code,
+        );
+        ensure_consumer_group(&stream_key, executor_group)
+            .await
+            .map_err(|e| CfgError::Init(e.to_string()))?;
     }
+    // 启动扫描线程
+    tokio::spawn(run_executor_loop(
+        app_instance_id.to_string(),
+        executor_config.executor_code.clone(),
+        executor_config.scan_interval,
+        handler,
+    ));
     Ok(())
 }
 
@@ -144,13 +150,14 @@ pub async fn setup_jobx_executor(
 /// 该函数不会返回，需通过 `tokio::spawn` 在独立任务中运行。
 async fn run_executor_loop(
     app_instance_id: String,
+    executor_code: String,
     initial_scan_interval: Duration,
     handler: Arc<dyn JobxMessageHandler>,
 ) {
     let mut ticker = build_ticker(initial_scan_interval);
     loop {
         ticker.tick().await;
-        let executor_config = match get_jobx_executor_config() {
+        let executor_config = match get_jobx_executor_config(&executor_code) {
             Ok(c) => c,
             Err(e) => {
                 warn!("获取工作者配置失败: {e:?}");
@@ -184,7 +191,13 @@ async fn run_executor_loop(
             }
         };
 
+        // 遍历 Redis Stream 回复中的每一条 Stream Key。
+        // 一次 XREAD[GROUP] 请求可以同时监听多个 Stream，
+        // 返回结果按 Stream Key 分组，每个 Stream Key 可能包含若干条消息。
         for stream_key in reply.keys {
+            // 遍历当前 Stream Key 下的所有消息 ID。
+            // 每条消息对应一个待领取的任务计划（Job），
+            // 需要逐一创建任务记录（take）并分发给 handler 执行。
             for stream_id in stream_key.ids {
                 let handler = Arc::clone(&handler);
                 let stream_name = stream_key.key.clone();
@@ -238,7 +251,7 @@ async fn run_executor_loop(
                     }
 
                     // ---- 执行任务 ----
-                    let retry_config = get_jobx_executor_config().ok();
+                    let retry_config = get_jobx_executor_config(&task.executor_code).ok();
                     let (retry_count, retry_interval) = retry_config
                         .as_ref()
                         .map(|c| (c.report_retry_count, c.report_retry_interval))
@@ -321,9 +334,7 @@ async fn run_executor_loop(
                                     fail_count += 1;
                                     warn!(
                                         "高频任务 {} 第{}次执行panic: {:?}",
-                                        task_id,
-                                        total_count,
-                                        e,
+                                        task_id, total_count, e,
                                     );
                                     last_status = TaskStatus::Failed;
                                 }
