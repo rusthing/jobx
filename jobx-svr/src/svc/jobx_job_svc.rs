@@ -5,6 +5,7 @@ use jobx_api::dic::JobType;
 use jobx_api::dto::JobxJobModifyDto;
 use robotech::api;
 use robotech::macros::svc;
+use robotech::db::get_db_conn;
 use robotech::redis::publish_to_stream_if_not_exists;
 use sea_orm::ActiveValue;
 use std::str::FromStr;
@@ -14,7 +15,7 @@ use wheel_rs::time_utils::now_ms;
 /// # 任务计划服务
 ///
 /// 负责任务计划的增删改查、调度计算以及定时扫描发布到 Redis Stream。
-#[svc(skip [add, modify])]
+#[svc(before_add = Self::before_add, before_modify = Self::before_modify)]
 pub struct JobxJobSvc;
 
 impl JobxJobSvc {
@@ -192,29 +193,21 @@ impl JobxJobSvc {
         Ok((next_assign_ms, is_high_freq_task))
     }
 
-    /// # 添加任务计划
+    /// # add 前置钩子：计算新增任务计划的调度字段
     ///
-    /// 校验输入参数、计算调度信息后，将任务计划写入数据库。
+    /// 根据任务类型计算并设置 `assign_lead_ms`、`next_assign_ms`、`high_freq` 等调度派生字段。
+    /// Manual 类型任务不参与调度，对应字段置为 None。
+    /// 此钩子由 `#[svc]` 宏在 `add` 方法中自动调用，调用时机在校验 DTO 之前。
     ///
     /// ## 参数
     ///
-    /// * `add_dto` - 任务计划新增 DTO。
-    /// * `db` - 数据库连接（事务）。
+    /// * `add_dto` - 任务计划新增 DTO，钩子会修改其中的调度派生字段并通过返回值写回。
     ///
     /// ## 返回值
     ///
-    /// 返回新创建的任务计划视图对象。
-    #[db_unwrap(transaction_required)]
-    #[log_call]
-    pub async fn add<C>(
-        mut add_dto: JobxJobAddDto,
-        #[skip_log] db: Option<&C>,
-    ) -> Result<Ro<JobxJobVo>, SvcError>
-    where
-        C: ConnectionTrait,
-    {
-        add_dto.validate()?;
-
+    /// * `Ok(JobxJobAddDto)` — 已完成调度字段计算的 DTO，将交还给 `#[svc]` 宏继续执行后续流程。
+    /// * `Err` — 参数不完整或调度计算失败。
+    async fn before_add(mut add_dto: JobxJobAddDto) -> Result<JobxJobAddDto, SvcError> {
         let job_type = add_dto
             .job_type
             .ok_or_else(|| validator::ValidationError::new("job_type不能为空"))?;
@@ -252,42 +245,35 @@ impl JobxJobSvc {
             add_dto.high_freq = Some(Some(high_freq));
         }
 
-        let active_model: ActiveModel = add_dto.into();
-        let one = JobxJobVo::from(JobxJobDao::insert(active_model, db).await?);
-        Ok(Ro::success("添加成功".to_string()).extra(Some(one)))
+        Ok(add_dto)
     }
 
-    /// # 修改任务计划
+    /// # modify 前置钩子：计算修改任务计划时的调度字段
     ///
-    /// 校验输入参数，若调度相关字段（job_type / cron / 间隔 / 有效时间 / 提前时长）有变更，
-    /// 则与数据库原值合并后重新计算调度信息，最后更新数据库。
+    /// 根据 DTO 中设置的调度参数，与数据库原值合并后重新计算 `next_assign_ms`、`high_freq`。
+    /// Manual 类型任务不参与调度，对应字段置为 None。
+    /// 此钩子由 `#[svc]` 宏在 `modify` 方法中自动调用，调用时机在校验 DTO 之前。
+    ///
+    /// 合并策略：DTO 中未传的字段（外层 `Option` 为 `None`）使用数据库原值，
+    /// 显式设置为 null 的字段（`Some(None)`）或传了具体值的字段（`Some(Some(v))`）以 DTO 为准。
     ///
     /// ## 参数
     ///
-    /// * `modify_dto` - 任务计划修改 DTO。
-    /// * `db` - 数据库连接（事务）。
+    /// * `modify_dto` - 任务计划修改 DTO，钩子会修改其中的调度派生字段并通过返回值写回。
     ///
     /// ## 返回值
     ///
-    /// 返回更新后的任务计划视图对象。
-    #[db_unwrap(transaction_required)]
-    #[log_call]
-    pub async fn modify<C>(
+    /// * `Ok(JobxJobModifyDto)` — 已完成调度字段计算的 DTO，将交还给 `#[svc]` 宏继续执行后续流程。
+    /// * `Err` — 参数不完整、原记录不存在或调度计算失败。
+    async fn before_modify(
         mut modify_dto: JobxJobModifyDto,
-        #[skip_log] db: Option<&C>,
-    ) -> Result<Ro<JobxJobVo>, SvcError>
-    where
-        C: ConnectionTrait,
-    {
-        modify_dto.validate()?;
-
+    ) -> Result<JobxJobModifyDto, SvcError> {
         let modify_dto_clone = modify_dto.clone();
         let id = modify_dto_clone
             .id
             .ok_or_else(|| validator::ValidationError::new("修改操作必须提供id"))?;
 
         // next_assign_ms 是派生字段（基于调度参数和 now 计算），每次 modify 都需刷新
-        // 先从 DTO 取出已设置的调度字段值（在 into() 消费 DTO 之前）
         if let Some(job_type) = modify_dto_clone.job_type.clone()
             && job_type == JobType::Manual
         {
@@ -295,8 +281,9 @@ impl JobxJobSvc {
             modify_dto.high_freq = Some(None);
             modify_dto.next_assign_ms = Some(None);
         } else {
-            // 获取原记录以获取可能未在modify_dto中设置的字段
-            let existing = JobxJobDao::get_by_id::<_, JobxJobVo>(id, db)
+            let db = get_db_conn()?;
+
+            let existing = JobxJobDao::get_by_id::<_, JobxJobVo>(id, db.as_ref())
                 .await?
                 .ok_or_else(|| SvcError::NotFound(id.to_string()))?;
 
@@ -335,9 +322,7 @@ impl JobxJobSvc {
             }
         }
 
-        let active_model: ActiveModel = modify_dto.into();
-        let one = JobxJobVo::from(JobxJobDao::update(active_model, db).await?);
-        Ok(Ro::success("修改成功".to_string()).extra(Some(one)))
+        Ok(modify_dto)
     }
 
     /// # 刷新任务计划的下次分派时间
