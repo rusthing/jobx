@@ -2,7 +2,7 @@ use derive_setters::Setters;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use typed_builder::TypedBuilder;
-use wheel_rs::serde::duration_serde;
+use wheel_rs::serde::{duration_option_serde, duration_serde};
 
 /// Executor 配置
 #[derive(Debug, Clone, Serialize, Deserialize, Setters, TypedBuilder)]
@@ -18,9 +18,12 @@ pub struct JobxExecutorConfig {
     /// 扫描间隔
     #[serde(with = "duration_serde", default = "scan_interval_default")]
     pub scan_interval: Duration,
-    /// 扫描阻塞时间
-    #[serde(with = "duration_serde", default = "scan_block_default")]
-    pub scan_block_duration: Duration,
+    /// 阻塞超时时间
+    /// Some(Duration::ZERO) 表示永久阻塞直到有新消息；
+    //  Some(Duration::from_millis(N)) 表示最多等待 N 毫秒，超时返回空结果；
+    //  None 表示非阻塞立即返回。
+    #[serde(with = "duration_option_serde", default = "block_duration_default")]
+    pub block_duration: Option<Duration>,
     /// 单次接收消息的最大数量
     #[serde(default = "max_messages_default")]
     pub max_messages: usize,
@@ -44,12 +47,12 @@ fn scan_interval_default() -> Duration {
     Duration::from_secs(1)
 }
 
-fn scan_block_default() -> Duration {
-    Duration::from_secs(5)
+fn block_duration_default() -> Option<Duration> {
+    Some(Duration::from_secs(5))
 }
 
 fn max_messages_default() -> usize {
-    100
+    5
 }
 
 fn report_retry_count_default() -> u32 {

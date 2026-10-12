@@ -173,12 +173,12 @@ async fn run_executor_loop(
             .executor_group
             .as_ref()
             .map(|g| (g.as_str(), app_instance_id.as_str()));
-        let scan_block_duration = executor_config.scan_block_duration;
+        let block_duration = executor_config.block_duration;
         let reply = match read_from_stream(
             &stream_key,
             ">",
             executor_config.max_messages,
-            Some(&scan_block_duration),
+            &block_duration,
             group,
         )
         .await
