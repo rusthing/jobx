@@ -9,7 +9,8 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct AppConfig {
-    /// jobx
+    /// jobx_scheduler
+    #[serde(default = "JobxSchedulerConfig::default")]
     pub jobx_scheduler: JobxSchedulerConfig,
     /// db
     pub db: DbConnConfig,
