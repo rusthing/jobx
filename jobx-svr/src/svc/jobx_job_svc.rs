@@ -226,10 +226,10 @@ impl JobxJobSvc {
             let valid_begin_ms = add_dto.valid_begin_ms.clone();
             let valid_end_ms = add_dto.valid_end_ms.clone();
 
-            let assign_lead_ms =
-                Some(Some(add_dto.assign_lead_ms.flatten().unwrap_or(U64::from(
-                    assign_lead_duration_default.as_millis() as u64,
-                ))));
+            // assign_lead_ms 在 DTO 中声明为 u32（宏映射成 U32），而调度计算统一使用 U64，这里先归一化再回写
+            let assign_lead_ms = add_dto.assign_lead_ms.flatten().unwrap_or(api::U32::from(
+                assign_lead_duration_default.as_millis() as u32,
+            ));
 
             let (next_assign_ms, high_freq) = Self::calc_job_schedule(
                 job_type,
@@ -237,9 +237,9 @@ impl JobxJobSvc {
                 interval_duration,
                 valid_begin_ms,
                 valid_end_ms,
-                assign_lead_ms,
+                Some(Some(U64::from(assign_lead_ms.value() as u64))),
             )?;
-            add_dto.assign_lead_ms = assign_lead_ms;
+            add_dto.assign_lead_ms = Some(Some(assign_lead_ms));
             add_dto.next_assign_ms =
                 Some(next_assign_ms.map(|next_assign_ms| next_assign_ms.into()));
             add_dto.high_freq = Some(Some(high_freq));
@@ -305,7 +305,12 @@ impl JobxJobSvc {
                     .or(Some(existing.valid_end_ms.clone()));
                 let assign_lead_ms = modify_dto_clone
                     .assign_lead_ms
-                    .or(Some(existing.assign_lead_ms.clone()));
+                    .map(|v| v.map(|v| U64::from(v.value() as u64)))
+                    .or(Some(
+                        existing
+                            .assign_lead_ms
+                            .map(|v| U64::from(v.value() as u64)),
+                    ));
 
                 let (next_assign_ms, high_freq) = Self::calc_job_schedule(
                     job_type,
@@ -369,7 +374,7 @@ impl JobxJobSvc {
                 } else {
                     let lead_ms = existing
                         .assign_lead_ms
-                        .map(|v| v.value())
+                        .map(|v| v.value() as u64)
                         .unwrap_or(assign_lead_duration_default.as_millis() as u64);
                     let interval_duration_ms = existing
                         .interval_duration
@@ -389,7 +394,7 @@ impl JobxJobSvc {
                 existing.interval_duration,
                 existing.valid_begin_ms,
                 existing.valid_end_ms,
-                existing.assign_lead_ms,
+                existing.assign_lead_ms.map(|v| U64::from(v.value() as u64)),
                 after_ms,
             )?;
             next_assign_ms.map(|next_assign_ms| next_assign_ms as i64)
