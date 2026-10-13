@@ -9,7 +9,7 @@ use jobx_api_client::dto::{JobxTaskAddDto, JobxTaskModifyDto};
 use redis::Value as RedisValue;
 use robotech::api::{U32, U64};
 use robotech::cfg::CfgError;
-use robotech::env::{APP_ENV, AppEnv, EnvError};
+use robotech::env::get_app_instance_id;
 use robotech::redis::{ack_stream_message, ensure_consumer_group, read_from_stream};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -125,11 +125,7 @@ pub async fn init_jobx_executor(
 ) -> Result<(), CfgError> {
     info!("setup jobx executor config...: {executor_config:?}");
     set_jobx_executor_config(executor_config.clone());
-    let AppEnv {
-        instance_id: app_instance_id,
-        ..
-    } = APP_ENV.get().ok_or(EnvError::GetAppEnv())?;
-    // 确保消费者组存在
+    let app_instance_id = get_app_instance_id();
     if let Some(executor_group) = &executor_config.executor_group {
         let stream_key = build_stream_key(
             &executor_config.executor_key,
