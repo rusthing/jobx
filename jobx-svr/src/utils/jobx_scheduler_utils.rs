@@ -36,7 +36,13 @@ pub fn setup_jobx_scheduler(
 /// 运行期间会动态读取最新配置，若扫描间隔变更则自动调整 ticker。
 /// 该函数不会返回，需通过 `tokio::spawn` 在独立任务中运行。
 async fn run_scheduler_loop(initial_scan_interval: Duration) {
-    let mut ticker = build_ticker(initial_scan_interval);
+    let scan_interval = if initial_scan_interval.is_zero() {
+        warn!("初始扫描间隔为0，使用默认值60s");
+        Duration::from_secs(60)
+    } else {
+        initial_scan_interval
+    };
+    let mut ticker = build_ticker(scan_interval);
     loop {
         ticker.tick().await;
         let config = match get_jobx_scheduler_config() {
@@ -50,8 +56,10 @@ async fn run_scheduler_loop(initial_scan_interval: Duration) {
         if let Err(e) = JobxJobSvc::scan_and_publish::<DatabaseTransaction>(&config, None).await {
             warn!("调度器扫描异常: {e:?}");
         }
-        if config.scan_interval != ticker.period() {
+        if config.scan_interval != ticker.period() && !config.scan_interval.is_zero() {
             ticker = build_ticker(config.scan_interval);
+        } else if config.scan_interval.is_zero() {
+            warn!("配置中的扫描间隔为0，保持当前间隔不变");
         }
     }
 }

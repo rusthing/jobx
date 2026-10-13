@@ -50,6 +50,22 @@ pub struct JobxSchedulerConfig {
     pub publish_retry_interval: Duration,
 }
 
+impl Default for JobxSchedulerConfig {
+    fn default() -> Self {
+        Self {
+            executor_key: executor_key_default(),
+            scan_interval: scan_interval_default(),
+            query_start_earlier_duration: query_start_earlier_duration_default(),
+            query_end_later_duration: query_end_later_duration_default(),
+            assign_lead_duration: assign_lead_duration_default(),
+            high_freq_threshold_duration: high_freq_threshold_default(),
+            high_freq_assign_interval: high_freq_assign_interval_default(),
+            publish_max_retries: publish_max_retries_default(),
+            publish_retry_interval: publish_retry_interval_default(),
+        }
+    }
+}
+
 fn executor_key_default() -> String {
     "jobx:executor".to_string()
 }
