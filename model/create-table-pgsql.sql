@@ -1,6 +1,6 @@
 /*==============================================================*/
 /* DBMS name:      PostgreSQL 9.x                               */
-/* Created on:     2026/10/13 10:45:46                          */
+/* Created on:     2026/10/13 15:04:40                          */
 /*==============================================================*/
 
 
@@ -115,10 +115,6 @@ create table jobx_task (
    exec_detail          VARCHAR(800)         null,
    exec_start_ms        INT8                 null,
    exec_end_ms          INT8                 null,
-   creater_id           INT8                 not null,
-   create_ms            INT8                 not null,
-   updater_id           INT8                 not null,
-   update_ms            INT8                 not null,
    executor_code        VARCHAR(50)          not null,
    executor_instance    VARCHAR(100)         null,
    exec_params          VARCHAR(800)         null,
@@ -129,6 +125,10 @@ create table jobx_task (
    valid_begin_ms       INT8                 null,
    valid_end_ms         INT8                 null,
    assign_lead_ms       INT4                 null,
+   creater_id           INT8                 not null,
+   create_ms            INT8                 not null,
+   updater_id           INT8                 not null,
+   update_ms            INT8                 not null,
    constraint PK_JOBX_TASK primary key (id),
    constraint AK_JOB_ID_AND_SCHEDULED_EXEC_STAR_JOBX_TASK unique (job_id, scheduled_exec_start_ms)
 );
@@ -169,18 +169,6 @@ comment on column jobx_task.exec_start_ms is
 comment on column jobx_task.exec_end_ms is
 '结束执行时间戳';
 
-comment on column jobx_task.creater_id is
-'创建者ID';
-
-comment on column jobx_task.create_ms is
-'创建时间戳';
-
-comment on column jobx_task.updater_id is
-'更新者ID';
-
-comment on column jobx_task.update_ms is
-'更新时间戳';
-
 comment on column jobx_task.executor_code is
 '执行器编码';
 
@@ -214,6 +202,18 @@ comment on column jobx_task.valid_end_ms is
 
 comment on column jobx_task.assign_lead_ms is
 '分派提前毫秒数';
+
+comment on column jobx_task.creater_id is
+'创建者ID';
+
+comment on column jobx_task.create_ms is
+'创建时间戳';
+
+comment on column jobx_task.updater_id is
+'更新者ID';
+
+comment on column jobx_task.update_ms is
+'更新时间戳';
 
 /*==============================================================*/
 /* Index: jobx_task_PK                                          */
