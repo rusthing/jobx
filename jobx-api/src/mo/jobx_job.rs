@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false, unique)]
     pub id: i64,
-    pub executor_code: String,
     #[sea_orm(unique)]
     pub name: String,
     pub params: Option<String>,
@@ -19,6 +18,7 @@ pub struct Model {
     pub interval_duration: Option<String>,
     pub valid_begin_ms: Option<i64>,
     pub valid_end_ms: Option<i64>,
+    pub executor_code: String,
     pub assign_lead_ms: Option<i32>,
     pub next_assign_ms: Option<i64>,
     pub remark: Option<String>,

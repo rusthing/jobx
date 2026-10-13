@@ -14,10 +14,13 @@ pub struct JobxJobDto {
     /// 计划类型: 0=手动分派, 1=cron表达式, 2=固定延迟, 3=固定频率
     pub job_type: JobType,
     /// 是否高频任务
+    /// 这个由计划类型、cron表达式、固定时间间隔与配置中的高频任务时长阈值计算得出
     pub high_freq: Option<bool>,
     /// cron表达式
+    /// 当 job_type 为 cron表达式时必填
     pub cron: Option<String>,
     /// 固定间隔时间
+    /// 当job_type为固定延迟或固定频率时必填
     pub interval_duration: Option<Duration>,
     /// 有效开始时间戳
     pub valid_begin_ms: Option<u64>,

@@ -42,12 +42,12 @@ pub struct JobxTaskVo {
     pub exec_start_ms: Option<u64>,
     /// 结束执行时间戳
     pub exec_end_ms: Option<u64>,
-    /// 创建者ID
+    /// 创建人的用户ID
     pub creator_id: u64,
-    /// 创建时间
+    /// 创建时间戳
     pub create_ms: u64,
-    /// 更新者ID
+    /// 修改人的用户ID
     pub updator_id: u64,
-    /// 更新时间
+    /// 修改时间戳
     pub update_ms: u64,
 }

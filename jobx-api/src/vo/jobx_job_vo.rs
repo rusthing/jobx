@@ -16,10 +16,13 @@ pub struct JobxJobVo {
     /// 计划类型: 0=手动分派, 1=cron表达式, 2=固定延迟, 3=固定频率
     pub job_type: JobType,
     /// 是否高频任务
+    /// 这个由计划类型、cron表达式、固定时间间隔与配置中的高频任务时长阈值计算得出
     pub high_freq: Option<bool>,
     /// cron表达式
+    /// 当 job_type 为 cron表达式时必填
     pub cron: Option<String>,
     /// 固定间隔时间
+    /// 当job_type为固定延迟或固定频率时必填
     pub interval_duration: Option<Duration>,
     /// 有效开始时间戳
     pub valid_begin_ms: Option<u64>,
@@ -33,12 +36,12 @@ pub struct JobxJobVo {
     pub remark: Option<String>,
     /// 启用
     pub enabled: bool,
-    /// 创建者ID
+    /// 创建人的用户ID
     pub creator_id: u64,
-    /// 创建时间
+    /// 创建时间戳
     pub create_ms: u64,
-    /// 更新者ID
+    /// 修改人的用户ID
     pub updator_id: u64,
-    /// 更新时间
+    /// 修改时间戳
     pub update_ms: u64,
 }

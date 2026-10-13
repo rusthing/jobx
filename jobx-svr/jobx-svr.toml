@@ -1,10 +1,10 @@
 profile = "dev"
 
-#[micro-jobx.consul]
-#base-url = "http://consul:8500"
+[micro-jobx.consul]
+base-url = "http://consul:8500"
 #config.file-format = "toml"
 #config.common-configs = "log.toml"
-#[micro-jobx.consul.registry]
+[micro-jobx.consul.registry]
 #sub-net = "192.168.1.0/24"
 
 
