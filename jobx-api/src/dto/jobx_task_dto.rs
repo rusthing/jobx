@@ -36,7 +36,8 @@ pub struct JobxTaskDto {
     /// 分派提前毫秒数
     pub assign_lead_ms: Option<u32>,
     /// 执行详情
-    pub exec_detail: Option<String>,
+    #[db_default]
+    pub exec_detail: String,
     /// 开始执行时间戳
     pub exec_start_ms: Option<u64>,
     /// 结束执行时间戳

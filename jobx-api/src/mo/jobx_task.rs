@@ -16,7 +16,7 @@ pub struct Model {
     pub assign_ms: i64,
     #[sea_orm(unique_key = "ak_job_id_and_scheduled_exec_star_jobx_task")]
     pub scheduled_exec_start_ms: Option<i64>,
-    pub exec_detail: Option<String>,
+    pub exec_detail: String,
     pub exec_start_ms: Option<i64>,
     pub exec_end_ms: Option<i64>,
     pub creater_id: i64,

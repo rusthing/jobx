@@ -5097,6 +5097,7 @@ DAT 1788940743</a:History>
 DAT 1789108744</a:History>
 <a:DataType>VARCHAR(800)</a:DataType>
 <a:Length>800</a:Length>
+<a:Column.Mandatory>1</a:Column.Mandatory>
 <a:GlobalObjectID/>
 </o:Column>
 <o:Column Id="o43">

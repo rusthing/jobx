@@ -112,7 +112,7 @@ create table jobx_task (
    status               INT2                 not null default 0,
    assign_ms            INT8                 not null,
    scheduled_exec_start_ms INT8                 null,
-   exec_detail          VARCHAR(800)         null,
+   exec_detail          VARCHAR(800)         not null,
    exec_start_ms        INT8                 null,
    exec_end_ms          INT8                 null,
    executor_code        VARCHAR(50)          not null,
@@ -233,4 +233,3 @@ alter table jobx_task
    add constraint fk_job_id__from__jobx_job foreign key (job_id)
       references jobx_job (id)
       on delete restrict on update restrict;
-
