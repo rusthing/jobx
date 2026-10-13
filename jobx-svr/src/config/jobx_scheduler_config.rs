@@ -75,7 +75,7 @@ fn scan_interval_default() -> Duration {
 }
 
 fn query_start_earlier_duration_default() -> Duration {
-    Duration::from_secs(60)
+    Duration::from_hours(3 * 24)
 }
 
 fn query_end_later_duration_default() -> Duration {

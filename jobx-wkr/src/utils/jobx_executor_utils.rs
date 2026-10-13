@@ -1,4 +1,5 @@
 use crate::config::JobxExecutorConfig;
+use anyhow::Result;
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use jobx_api::dic::{JobType, TaskStatus, TaskType};
@@ -9,12 +10,12 @@ use redis::Value as RedisValue;
 use robotech::api::{U32, U64};
 use robotech::cfg::CfgError;
 use robotech::env::{APP_ENV, AppEnv, EnvError};
-use robotech::redis::{ensure_consumer_group, read_from_stream};
+use robotech::redis::{ack_stream_message, ensure_consumer_group, read_from_stream};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::Instant;
-use tracing::{info, warn};
+use tracing::{info, trace, warn};
 use wheel_rs::time_utils::{build_ticker, now_ms};
 
 static JOBX_EXECUTOR_CONFIGS: ArcSwapOption<HashMap<String, Arc<JobxExecutorConfig>>> =
@@ -88,6 +89,9 @@ fn build_task_add_dto(job: &JobxJobVo, instance_id: String, user_id: U64) -> Job
 /// 并调用此 trait 进行处理。
 /// 下游客户端需实现此 trait 来完成实际的任务执行逻辑。
 ///
+/// 返回 `Ok(String)` 表示执行成功，`Err(anyhow::Error)` 表示执行失败，
+/// 错误信息会被记录到日志和任务执行结果中。
+///
 /// ## 使用示例
 ///
 /// ```no_run
@@ -99,9 +103,11 @@ fn build_task_add_dto(job: &JobxJobVo, instance_id: String, user_id: U64) -> Job
 ///
 /// #[async_trait]
 /// impl JobxTaskHandler for MyHandler {
-///     async fn handle(&self, task: &JobxTaskVo) {
+///     async fn handle(&self, task: &JobxTaskVo) -> Result<String> {
 ///         // task 包含任务的所有信息：executor_code、exec_params、job_type、task_id 等
 ///         // 下游客户端根据 task 信息执行具体业务逻辑
+///         // 返回 Err 表示任务执行失败，错误信息将被记录
+///         Ok(())
 ///     }
 /// }
 /// ```
@@ -109,7 +115,8 @@ fn build_task_add_dto(job: &JobxJobVo, instance_id: String, user_id: U64) -> Job
 pub trait JobxTaskHandler: Send + Sync + 'static {
     /// 处理任务
     /// - task: 任务视图对象，包含 executor_code、exec_params、job_type、task_id 等完整字段
-    async fn handle(&self, task: &JobxTaskVo);
+    /// - 返回 `Ok(())` 表示执行成功，`Err` 表示执行失败
+    async fn handle(&self, task: &JobxTaskVo) -> Result<String>;
 }
 
 pub async fn init_jobx_executor(
@@ -144,8 +151,14 @@ pub async fn init_jobx_executor(
 
 /// # 启动工作者订阅循环
 ///
-/// 订阅 Redis Stream 中发布的任务，阻塞等待新消息到达。
-/// 收到消息后调用 `handler` 处理，每条消息独立处理，便于下游客户端实现具体业务逻辑。
+/// 按配置的扫描间隔，以消费者组模式从 Redis Stream 拉取任务消息。
+/// 每轮循环通过 `XREADGROUP ... ">"` 接收**从未投递给组内任何消费者**的新消息，
+/// 收到后逐一创建任务记录（take）并交给 `handler` 执行业务逻辑。
+///
+/// `">"` 只返回新消息，不会重复投递已在组内分配过的消息；
+/// 如果需要处理崩溃恢复场景（认领其他消费者未 ACK 的 pending 消息），
+/// 需要额外用 `"0"` 读取 PEL。
+///
 /// 运行期间会动态读取最新配置，若扫描间隔变更则自动调整 ticker。
 /// 该函数不会返回，需通过 `tokio::spawn` 在独立任务中运行。
 async fn run_executor_loop(
@@ -174,6 +187,7 @@ async fn run_executor_loop(
             .as_ref()
             .map(|g| (g.as_str(), app_instance_id.as_str()));
         let block_duration = executor_config.block_duration;
+        // ">" = XREADGROUP 模式下仅接收未投递过的新消息，不会重复拿到已分配的消息
         let reply = match read_from_stream(
             &stream_key,
             ">",
@@ -185,7 +199,11 @@ async fn run_executor_loop(
         {
             Ok(r) => r,
             Err(e) => {
-                warn!("读取 Redis Stream 失败: {e:?}");
+                if e.is_timeout() {
+                    trace!("读取 Redis Stream 超时: {e:?}");
+                } else {
+                    warn!("读取 Redis Stream 失败: {e:?}");
+                }
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 continue;
             }
@@ -202,6 +220,7 @@ async fn run_executor_loop(
                 let handler = Arc::clone(&handler);
                 let stream_name = stream_key.key.clone();
                 let instance_id = app_instance_id.clone();
+                let executor_group = executor_config.executor_group.clone();
                 tokio::spawn(async move {
                     info!("收到任务: stream={}, id={}", stream_name, stream_id.id);
 
@@ -326,9 +345,17 @@ async fn run_executor_loop(
                             last_elapsed = elapsed;
 
                             match join_result {
-                                Ok(_) => {
+                                Ok(Ok(_)) => {
                                     success_count += 1;
                                     last_status = TaskStatus::Success;
+                                }
+                                Ok(Err(e)) => {
+                                    fail_count += 1;
+                                    warn!(
+                                        "高频任务 {} 第{}次执行失败: {e:#}",
+                                        task_id, total_count,
+                                    );
+                                    last_status = TaskStatus::Failed;
                                 }
                                 Err(e) => {
                                     fail_count += 1;
@@ -375,7 +402,7 @@ async fn run_executor_loop(
                             last_elapsed,
                         );
 
-                        let detail = Some(format!(
+                        let exec_detail = format!(
                             "共{}次 成功{} 失败{} | min={}ms max={}ms avg={}ms | 首次={}ms 末次={}ms",
                             total_count,
                             success_count,
@@ -385,17 +412,21 @@ async fn run_executor_loop(
                             avg_elapsed,
                             first_elapsed.unwrap_or(0),
                             last_elapsed,
-                        ));
+                        );
                         let status = last_status;
-                        (status, detail)
+                        (status, exec_detail)
                     } else {
                         let join_result =
                             tokio::spawn(async move { handler.handle(&task).await }).await;
                         match join_result {
-                            Ok(_) => (TaskStatus::Success, None),
+                            Ok(Ok(exec_detail)) => (TaskStatus::Success, exec_detail),
+                            Ok(Err(e)) => {
+                                warn!("任务 {} 执行失败: {e:#}", task_id);
+                                (TaskStatus::Failed, format!("{e:#}"))
+                            }
                             Err(e) => {
                                 warn!("任务 {} 执行panic: {:?}", task_id, e);
-                                (TaskStatus::Failed, Some(format!("panic: {e}")))
+                                (TaskStatus::Failed, format!("panic: {e}"))
                             }
                         }
                     };
@@ -405,12 +436,21 @@ async fn run_executor_loop(
                         &api_client,
                         U64::from(task_id),
                         status,
-                        exec_detail,
+                        Some(exec_detail),
                         user_id,
                         retry_count,
                         retry_interval,
                     )
                     .await;
+
+                    // 确认 Redis Stream 消息已处理，从消费者 PEL 中移除
+                    if let Some(ref group_name) = executor_group {
+                        if let Err(e) =
+                            ack_stream_message(&stream_name, group_name, &[&stream_id.id]).await
+                        {
+                            warn!("ACK 消息 {} 失败: {:?}", stream_id.id, e);
+                        }
+                    }
                 });
             }
         }

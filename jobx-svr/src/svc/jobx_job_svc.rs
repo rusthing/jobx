@@ -1,11 +1,11 @@
-use crate::config::{get_jobx_scheduler_config, JobxSchedulerConfig};
+use crate::config::{JobxSchedulerConfig, get_jobx_scheduler_config};
 use chrono::{TimeZone, Utc};
 use cron::Schedule;
 use jobx_api::dic::JobType;
 use jobx_api::dto::JobxJobModifyDto;
 use robotech::api;
-use robotech::macros::svc;
 use robotech::db::get_db_conn;
+use robotech::macros::svc;
 use robotech::redis::publish_to_stream_if_not_exists;
 use sea_orm::ActiveValue;
 use std::str::FromStr;
@@ -265,9 +265,7 @@ impl JobxJobSvc {
     ///
     /// * `Ok(JobxJobModifyDto)` — 已完成调度字段计算的 DTO，将交还给 `#[svc]` 宏继续执行后续流程。
     /// * `Err` — 参数不完整、原记录不存在或调度计算失败。
-    async fn before_modify(
-        mut modify_dto: JobxJobModifyDto,
-    ) -> Result<JobxJobModifyDto, SvcError> {
+    async fn before_modify(mut modify_dto: JobxJobModifyDto) -> Result<JobxJobModifyDto, SvcError> {
         let modify_dto_clone = modify_dto.clone();
         let id = modify_dto_clone
             .id
@@ -307,9 +305,7 @@ impl JobxJobSvc {
                     .assign_lead_ms
                     .map(|v| v.map(|v| U64::from(v.value() as u64)))
                     .or(Some(
-                        existing
-                            .assign_lead_ms
-                            .map(|v| U64::from(v.value() as u64)),
+                        existing.assign_lead_ms.map(|v| U64::from(v.value() as u64)),
                     ));
 
                 let (next_assign_ms, high_freq) = Self::calc_job_schedule(
@@ -467,26 +463,20 @@ impl JobxJobSvc {
                     match publish_to_stream_if_not_exists(&key, &[("payload", &payload)]).await {
                         Ok(Some(msg_id)) => {
                             info!(
-                                "发布任务到 Redis Stream: job_name={}, msg_id={}, executor_code={}",
-                                job.name, msg_id, job.executor_code
+                                "发布任务到 Redis Stream: key={key}, msg_id={msg_id}, payload={payload}",
                             );
                             published = true;
                             break;
                         }
                         Ok(None) => {
-                            warn!(
-                                "任务已存在: job_name={}, executor_code={}",
-                                job.name, job.executor_code
-                            );
+                            warn!("任务在Redis Stream中已存在: key={key}, payload={payload}",);
                             published = true;
                             break;
                         }
                         Err(e) => {
                             warn!(
-                                "发布任务到 Redis Stream 失败(第{}次): job_name={}, executor_code={}, error={:?}",
+                                "发布任务到 Redis Stream 失败(第{}次):  key={key}, payload={payload}, error={:?}",
                                 attempt + 1,
-                                job.name,
-                                job.executor_code,
                                 e
                             );
                             if attempt < publish_max_retries - 1 {

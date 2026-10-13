@@ -34,7 +34,7 @@ pub struct JobxJobConfig {
     /// 计划类型: 0=手动分派, 1=cron表达式, 2=固定延迟, 3=固定频率
     #[into(Some(~))]
     #[serde(default = "job_type_default")]
-    #[builder(default)]
+    #[builder(default = job_type_default())]
     pub job_type: JobType,
     /// cron 表达式
     /// 当 job_type 为 Cron 时必填
