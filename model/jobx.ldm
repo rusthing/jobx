@@ -1817,8 +1817,8 @@ LABL 0 新宋体,8,N</a:FontList>
 </o:EntityAttribute>
 <o:EntityAttribute Id="o28">
 <a:ObjectID>1A15F024-5440-4A8C-ADA8-D9AD2DB77E9D</a:ObjectID>
-<a:Name>创建人的用户ID</a:Name>
-<a:Code>creator_id</a:Code>
+<a:Name>创建者ID</a:Name>
+<a:Code>creater_id</a:Code>
 <a:CreationDate>1788854714</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1788854746</a:ModificationDate>
@@ -1841,8 +1841,8 @@ LABL 0 新宋体,8,N</a:FontList>
 </o:EntityAttribute>
 <o:EntityAttribute Id="o30">
 <a:ObjectID>3BD03C3E-52AF-4F03-8D3B-7813FE591E0A</a:ObjectID>
-<a:Name>修改人的用户ID</a:Name>
-<a:Code>updator_id</a:Code>
+<a:Name>更新者ID</a:Name>
+<a:Code>updater_id</a:Code>
 <a:CreationDate>1788854714</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1788854746</a:ModificationDate>
@@ -1853,7 +1853,7 @@ LABL 0 新宋体,8,N</a:FontList>
 </o:EntityAttribute>
 <o:EntityAttribute Id="o31">
 <a:ObjectID>AA78972F-F924-40E1-B8F1-BFE5A066C82E</a:ObjectID>
-<a:Name>修改时间戳</a:Name>
+<a:Name>更新时间戳</a:Name>
 <a:Code>update_ms</a:Code>
 <a:CreationDate>1788854714</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
@@ -2022,8 +2022,8 @@ LABL 0 新宋体,8,N</a:FontList>
 </o:EntityAttribute>
 <o:EntityAttribute Id="o43">
 <a:ObjectID>1DF3EFBC-83CA-4FE5-93B4-658F6FBEFEB3</a:ObjectID>
-<a:Name>创建人的用户ID</a:Name>
-<a:Code>creator_id</a:Code>
+<a:Name>创建者ID</a:Name>
+<a:Code>creater_id</a:Code>
 <a:CreationDate>1788857769</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1788857797</a:ModificationDate>
@@ -2046,8 +2046,8 @@ LABL 0 新宋体,8,N</a:FontList>
 </o:EntityAttribute>
 <o:EntityAttribute Id="o45">
 <a:ObjectID>7EB1A9EC-F408-45BD-B9AC-6FC8D100090C</a:ObjectID>
-<a:Name>修改人的用户ID</a:Name>
-<a:Code>updator_id</a:Code>
+<a:Name>更新者ID</a:Name>
+<a:Code>updater_id</a:Code>
 <a:CreationDate>1788857769</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1788857797</a:ModificationDate>
@@ -2058,7 +2058,7 @@ LABL 0 新宋体,8,N</a:FontList>
 </o:EntityAttribute>
 <o:EntityAttribute Id="o46">
 <a:ObjectID>B6D37D6C-7CB9-4218-A6B3-EEE01568FA81</a:ObjectID>
-<a:Name>修改时间戳</a:Name>
+<a:Name>更新时间戳</a:Name>
 <a:Code>update_ms</a:Code>
 <a:CreationDate>1788857769</a:CreationDate>
 <a:Creator>张柏子</a:Creator>

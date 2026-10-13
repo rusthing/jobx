@@ -22,9 +22,9 @@ create table jobx_job (
    next_assign_ms       INT8                 null,
    remark               VARCHAR(50)          null,
    enabled              BOOL                 not null default true,
-   creator_id           INT8                 not null,
+   creater_id           INT8                 not null,
    create_ms            INT8                 not null,
-   updator_id           INT8                 not null,
+   updater_id           INT8                 not null,
    update_ms            INT8                 not null,
    constraint PK_JOBX_JOB primary key (id),
    constraint AK_NAME_JOBX_JOB unique (name)
@@ -83,17 +83,17 @@ comment on column jobx_job.remark is
 comment on column jobx_job.enabled is
 '启用';
 
-comment on column jobx_job.creator_id is
-'创建人的用户ID';
+comment on column jobx_job.creater_id is
+'创建者ID';
 
 comment on column jobx_job.create_ms is
 '创建时间戳';
 
-comment on column jobx_job.updator_id is
-'修改人的用户ID';
+comment on column jobx_job.updater_id is
+'更新者ID';
 
 comment on column jobx_job.update_ms is
-'修改时间戳';
+'更新时间戳';
 
 /*==============================================================*/
 /* Index: jobx_job_PK                                           */
@@ -115,9 +115,9 @@ create table jobx_task (
    exec_detail          VARCHAR(800)         null,
    exec_start_ms        INT8                 null,
    exec_end_ms          INT8                 null,
-   creator_id           INT8                 not null,
+   creater_id           INT8                 not null,
    create_ms            INT8                 not null,
-   updator_id           INT8                 not null,
+   updater_id           INT8                 not null,
    update_ms            INT8                 not null,
    executor_code        VARCHAR(50)          not null,
    executor_instance    VARCHAR(100)         null,
@@ -169,17 +169,17 @@ comment on column jobx_task.exec_start_ms is
 comment on column jobx_task.exec_end_ms is
 '结束执行时间戳';
 
-comment on column jobx_task.creator_id is
-'创建人的用户ID';
+comment on column jobx_task.creater_id is
+'创建者ID';
 
 comment on column jobx_task.create_ms is
 '创建时间戳';
 
-comment on column jobx_task.updator_id is
-'修改人的用户ID';
+comment on column jobx_task.updater_id is
+'更新者ID';
 
 comment on column jobx_task.update_ms is
-'修改时间戳';
+'更新时间戳';
 
 comment on column jobx_task.executor_code is
 '执行器编码';

@@ -36,12 +36,12 @@ pub struct JobxJobVo {
     pub remark: Option<String>,
     /// 启用
     pub enabled: bool,
-    /// 创建人的用户ID
-    pub creator_id: u64,
+    /// 创建者ID
+    pub creater_id: u64,
     /// 创建时间戳
     pub create_ms: u64,
-    /// 修改人的用户ID
-    pub updator_id: u64,
-    /// 修改时间戳
+    /// 更新者ID
+    pub updater_id: u64,
+    /// 更新时间戳
     pub update_ms: u64,
 }

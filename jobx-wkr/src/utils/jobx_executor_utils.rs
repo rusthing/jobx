@@ -220,7 +220,7 @@ async fn run_executor_loop(
                             return;
                         }
                     };
-                    let user_id: U64 = job.updator_id.into();
+                    let user_id: U64 = job.updater_id.into();
                     let add_dto = build_task_add_dto(&job, instance_id, user_id);
                     let task = match api_client.task_client.take(&add_dto).await {
                         Ok(ro) => match ro.extra {

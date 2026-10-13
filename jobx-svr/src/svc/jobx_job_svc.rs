@@ -403,7 +403,7 @@ impl JobxJobSvc {
         let active_model = ActiveModel {
             id: ActiveValue::Set(job_id.into()),
             next_assign_ms: ActiveValue::Set(next_assign_ms),
-            updator_id: ActiveValue::Set(existing.updator_id.value() as i64),
+            updater_id: ActiveValue::Set(existing.updater_id.value() as i64),
             ..Default::default()
         };
 

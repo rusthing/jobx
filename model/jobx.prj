@@ -571,8 +571,8 @@ Shadow=0</a:DisplayPreferences>
 <c:Symbols>
 <o:DependencyLinkSymbol Id="o4">
 <a:ModificationDate>1788921624</a:ModificationDate>
-<a:Rect>((-2063,-6222), (2061,-247))</a:Rect>
-<a:ListOfPoints>((-1,-647),(-1,-5822))</a:ListOfPoints>
+<a:Rect>((-2063,-6218), (2061,-247))</a:Rect>
+<a:ListOfPoints>((-1,-647),(-1,-5818))</a:ListOfPoints>
 <a:CornerStyle>1</a:CornerStyle>
 <a:ArrowStyle>1</a:ArrowStyle>
 <a:LineColor>5518853</a:LineColor>
@@ -613,7 +613,7 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:ModificationDate>1788921306</a:ModificationDate>
 <a:IconMode>2</a:IconMode>
 <a:EmptyAreaSize>(800, 800)</a:EmptyAreaSize>
-<a:Rect>((-1202,-8220), (1197,-5822))</a:Rect>
+<a:Rect>((-1202,-8216), (1197,-5818))</a:Rect>
 <a:LineColor>12034707</a:LineColor>
 <a:FillColor>16437422</a:FillColor>
 <a:ShadowColor>12632256</a:ShadowColor>

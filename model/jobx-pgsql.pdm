@@ -4817,8 +4817,8 @@ DAT 1788921306</a:History>
 </o:Column>
 <o:Column Id="o26">
 <a:ObjectID>02721AFC-4558-41EC-90BF-74513332F0D9</a:ObjectID>
-<a:Name>创建人的用户ID</a:Name>
-<a:Code>creator_id</a:Code>
+<a:Name>创建者ID</a:Name>
+<a:Code>creater_id</a:Code>
 <a:CreationDate>1788921306</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1788921306</a:ModificationDate>
@@ -4847,8 +4847,8 @@ DAT 1788921306</a:History>
 </o:Column>
 <o:Column Id="o28">
 <a:ObjectID>10EDDB07-21D2-4704-B71C-AFABCECACDB1</a:ObjectID>
-<a:Name>修改人的用户ID</a:Name>
-<a:Code>updator_id</a:Code>
+<a:Name>更新者ID</a:Name>
+<a:Code>updater_id</a:Code>
 <a:CreationDate>1788921306</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1788921306</a:ModificationDate>
@@ -4862,7 +4862,7 @@ DAT 1788921306</a:History>
 </o:Column>
 <o:Column Id="o29">
 <a:ObjectID>D38BC5D9-4225-441F-9B70-BEB15E65FE77</a:ObjectID>
-<a:Name>修改时间戳</a:Name>
+<a:Name>更新时间戳</a:Name>
 <a:Code>update_ms</a:Code>
 <a:CreationDate>1788921306</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
@@ -5128,8 +5128,8 @@ DAT 1788921306</a:History>
 </o:Column>
 <o:Column Id="o45">
 <a:ObjectID>BE839736-BBC2-4615-B268-B5BBC62734B3</a:ObjectID>
-<a:Name>创建人的用户ID</a:Name>
-<a:Code>creator_id</a:Code>
+<a:Name>创建者ID</a:Name>
+<a:Code>creater_id</a:Code>
 <a:CreationDate>1788921306</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1788921306</a:ModificationDate>
@@ -5158,8 +5158,8 @@ DAT 1788921306</a:History>
 </o:Column>
 <o:Column Id="o47">
 <a:ObjectID>C28E490B-D9ED-4857-BA03-7C7778B276B4</a:ObjectID>
-<a:Name>修改人的用户ID</a:Name>
-<a:Code>updator_id</a:Code>
+<a:Name>更新者ID</a:Name>
+<a:Code>updater_id</a:Code>
 <a:CreationDate>1788921306</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1788921306</a:ModificationDate>
@@ -5173,7 +5173,7 @@ DAT 1788921306</a:History>
 </o:Column>
 <o:Column Id="o48">
 <a:ObjectID>DE86983A-2029-405D-9315-1F019DF0EC04</a:ObjectID>
-<a:Name>修改时间戳</a:Name>
+<a:Name>更新时间戳</a:Name>
 <a:Code>update_ms</a:Code>
 <a:CreationDate>1788921306</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
