@@ -15,7 +15,6 @@ use wheel_rs::serde::duration_option_serde;
     high_freq: Default::default(),
     valid_begin_ms: Default::default(),
     valid_end_ms: Default::default(),
-    report_result: Default::default(),
     next_assign_ms: Default::default(),
     enabled: Default::default(),
     id: Default::default(),
@@ -53,10 +52,10 @@ pub struct JobxJobConfig {
     pub executor_code: String,
     /// 分派提前毫秒数
     /// 调度器会提前此毫秒数将任务分派给执行器，用于预热或预加载
-    #[into(Some(~.map(|v| robotech::api::U64::from(v))))]
+    #[into(Some(~.map(|v| robotech::api::U32::from(v))))]
     #[serde(default = "assign_lead_ms_default")]
     #[builder(default = assign_lead_ms_default())]
-    pub assign_lead_ms: Option<u64>,
+    pub assign_lead_ms: Option<u32>,
     /// 备注
     #[into(Some(~))]
     #[serde(default)]
@@ -72,6 +71,6 @@ fn interval_duration_default() -> Option<Duration> {
     Some(Duration::from_secs(60))
 }
 
-fn assign_lead_ms_default() -> Option<u64> {
+fn assign_lead_ms_default() -> Option<u32> {
     Some(60000)
 }

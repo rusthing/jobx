@@ -6,7 +6,7 @@ use jobx_api::vo::{JobxJobVo, JobxTaskVo};
 use jobx_api_client::api_client::{JobxApiClient, get_jobx_api_client};
 use jobx_api_client::dto::{JobxTaskAddDto, JobxTaskModifyDto};
 use redis::Value as RedisValue;
-use robotech::api::U64;
+use robotech::api::{U32, U64};
 use robotech::cfg::CfgError;
 use robotech::env::{APP_ENV, AppEnv, EnvError};
 use robotech::redis::{ensure_consumer_group, read_from_stream};
@@ -66,7 +66,7 @@ fn build_task_add_dto(job: &JobxJobVo, instance_id: String, user_id: U64) -> Job
         .scheduled_exec_start_ms(
             job.next_assign_ms
                 .zip(job.assign_lead_ms)
-                .map(|(next_ms, lead_ms)| U64::from(u64::from(next_ms) + lead_ms)),
+                .map(|(next_ms, lead_ms)| U64::from(u64::from(next_ms) + u64::from(lead_ms))),
         )
         .executor_code(job.executor_code.clone())
         .executor_instance(Some(instance_id))
@@ -77,7 +77,7 @@ fn build_task_add_dto(job: &JobxJobVo, instance_id: String, user_id: U64) -> Job
         .interval_duration(job.interval_duration)
         .valid_begin_ms(job.valid_begin_ms.map(|v| v.into()))
         .valid_end_ms(job.valid_end_ms.map(|v| v.into()))
-        .assign_lead_ms(job.assign_lead_ms.map(U64::from))
+        .assign_lead_ms(job.assign_lead_ms.map(U32::from))
         ._current_user_id(user_id)
         .build()
 }

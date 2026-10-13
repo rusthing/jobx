@@ -1,6 +1,6 @@
 /*==============================================================*/
 /* DBMS name:      PostgreSQL 9.x                               */
-/* Created on:     2026/9/17 12:41:45                           */
+/* Created on:     2026/10/12 18:47:32                          */
 /*==============================================================*/
 
 
@@ -18,8 +18,7 @@ create table jobx_job (
    valid_begin_ms       INT8                 null,
    valid_end_ms         INT8                 null,
    executor_code        VARCHAR(50)          not null,
-   assign_lead_ms BIGINT                   null,
-   report_result        BOOL                 not null default true,
+   assign_lead_ms       INT4                 null,
    next_assign_ms       INT8                 null,
    remark               VARCHAR(50)          null,
    enabled              BOOL                 not null default true,
@@ -51,13 +50,16 @@ comment on column jobx_job.job_type is
 3: 固定频率';
 
 comment on column jobx_job.high_freq is
-'是否高频任务';
+'是否高频任务
+这个由计划类型、cron表达式、固定时间间隔与配置中的高频任务时长阈值计算得出';
 
 comment on column jobx_job.cron is
-'cron表达式';
+'cron表达式
+当 job_type 为 cron表达式时必填';
 
 comment on column jobx_job.interval_duration is
-'固定间隔时间';
+'固定间隔时间
+当job_type为固定延迟或固定频率时必填';
 
 comment on column jobx_job.valid_begin_ms is
 '有效开始时间戳';
@@ -70,10 +72,7 @@ comment on column jobx_job.executor_code is
 发布任务消息时的key将以此编码结尾，只有相同编码的执行器才订阅此key';
 
 comment on column jobx_job.assign_lead_ms is
-'分派提前时间';
-
-comment on column jobx_job.report_result is
-'是否上报执行结果到服务端';
+'分派提前毫秒数';
 
 comment on column jobx_job.next_assign_ms is
 '下次分派时间戳';
@@ -112,7 +111,14 @@ create table jobx_task (
    job_id               INT8                 null,
    status               INT2                 not null default 0,
    assign_ms            INT8                 not null,
-   scheduled_exec_start_ms INT8               null,
+   scheduled_exec_start_ms INT8                 null,
+   exec_detail          VARCHAR(800)         null,
+   exec_start_ms        INT8                 null,
+   exec_end_ms          INT8                 null,
+   creator_id           INT8                 not null,
+   create_ms            INT8                 not null,
+   updator_id           INT8                 not null,
+   update_ms            INT8                 not null,
    executor_code        VARCHAR(50)          not null,
    executor_instance    VARCHAR(100)         null,
    exec_params          VARCHAR(800)         null,
@@ -122,17 +128,9 @@ create table jobx_task (
    interval_duration    VARCHAR(10)          null,
    valid_begin_ms       INT8                 null,
    valid_end_ms         INT8                 null,
-   assign_lead_ms BIGINT                   null,
-   report_result        BOOL                 not null default true,
-   exec_detail          VARCHAR(800)         null,
-   exec_start_ms        INT8                 null,
-   exec_end_ms          INT8                 null,
-   creator_id           INT8                 not null,
-   create_ms            INT8                 not null,
-   updator_id           INT8                 not null,
-   update_ms            INT8                 not null,
+   assign_lead_ms       INT4                 null,
    constraint PK_JOBX_TASK primary key (id),
-   constraint AK_JOB_ID_AND_SCHEDULED_EXEC_START_MS unique (job_id, scheduled_exec_start_ms)
+   constraint AK_JOB_ID_AND_SCHEDULED_EXEC_STAR_JOBX_TASK unique (job_id, scheduled_exec_start_ms)
 );
 
 comment on table jobx_task is
@@ -161,6 +159,27 @@ comment on column jobx_task.assign_ms is
 
 comment on column jobx_task.scheduled_exec_start_ms is
 '预定开始执行时间戳';
+
+comment on column jobx_task.exec_detail is
+'执行详情';
+
+comment on column jobx_task.exec_start_ms is
+'开始执行时间戳';
+
+comment on column jobx_task.exec_end_ms is
+'结束执行时间戳';
+
+comment on column jobx_task.creator_id is
+'创建人的用户ID';
+
+comment on column jobx_task.create_ms is
+'创建时间戳';
+
+comment on column jobx_task.updator_id is
+'修改人的用户ID';
+
+comment on column jobx_task.update_ms is
+'修改时间戳';
 
 comment on column jobx_task.executor_code is
 '执行器编码';
@@ -194,31 +213,7 @@ comment on column jobx_task.valid_end_ms is
 '有效结束时间戳';
 
 comment on column jobx_task.assign_lead_ms is
-'分派提前时间';
-
-comment on column jobx_task.report_result is
-'是否上报执行结果到服务端';
-
-comment on column jobx_task.exec_detail is
-'执行详情';
-
-comment on column jobx_task.exec_start_ms is
-'开始执行时间戳';
-
-comment on column jobx_task.exec_end_ms is
-'结束执行时间戳';
-
-comment on column jobx_task.creator_id is
-'创建人的用户ID';
-
-comment on column jobx_task.create_ms is
-'创建时间戳';
-
-comment on column jobx_task.updator_id is
-'修改人的用户ID';
-
-comment on column jobx_task.update_ms is
-'修改时间戳';
+'分派提前毫秒数';
 
 /*==============================================================*/
 /* Index: jobx_task_PK                                          */
@@ -238,3 +233,4 @@ alter table jobx_task
    add constraint fk_job_id__from__jobx_job foreign key (job_id)
       references jobx_job (id)
       on delete restrict on update restrict;
+

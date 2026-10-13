@@ -10,11 +10,11 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false, unique)]
     pub id: i64,
     pub task_type: i16,
-    #[sea_orm(unique_key = "ak_job_id_and_scheduled_exec_start_ms")]
+    #[sea_orm(unique_key = "ak_job_id_and_scheduled_exec_star_jobx_task")]
     pub job_id: Option<i64>,
     pub status: i16,
     pub assign_ms: i64,
-    #[sea_orm(unique_key = "ak_job_id_and_scheduled_exec_start_ms")]
+    #[sea_orm(unique_key = "ak_job_id_and_scheduled_exec_star_jobx_task")]
     pub scheduled_exec_start_ms: Option<i64>,
     pub executor_code: String,
     pub executor_instance: Option<String>,
@@ -25,8 +25,7 @@ pub struct Model {
     pub interval_duration: Option<String>,
     pub valid_begin_ms: Option<i64>,
     pub valid_end_ms: Option<i64>,
-    pub assign_lead_ms: Option<i64>,
-    pub report_result: bool,
+    pub assign_lead_ms: Option<i32>,
     pub exec_detail: Option<String>,
     pub exec_start_ms: Option<i64>,
     pub exec_end_ms: Option<i64>,

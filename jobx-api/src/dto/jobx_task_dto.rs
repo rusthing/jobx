@@ -34,9 +34,7 @@ pub struct JobxTaskDto {
     /// 有效结束时间戳
     pub valid_end_ms: Option<u64>,
     /// 分派提前毫秒数
-    pub assign_lead_ms: Option<u64>,
-    /// 是否上报执行结果
-    pub report_result: bool,
+    pub assign_lead_ms: Option<u32>,
     /// 执行详情
     pub exec_detail: Option<String>,
     /// 开始执行时间戳
