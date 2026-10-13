@@ -1523,9 +1523,9 @@ Shadow=0</a:DisplayPreferences>
 <c:Symbols>
 <o:RelationshipSymbol Id="o6">
 <a:CreationDate>1788858211</a:CreationDate>
-<a:ModificationDate>1789436538</a:ModificationDate>
-<a:Rect>((213,18737), (9851,21137))</a:Rect>
-<a:ListOfPoints>((613,19937),(8451,19937))</a:ListOfPoints>
+<a:ModificationDate>1791774218</a:ModificationDate>
+<a:Rect>((-1079,18812), (11319,21212))</a:Rect>
+<a:ListOfPoints>((-679,20012),(9919,20012))</a:ListOfPoints>
 <a:CornerStyle>1</a:CornerStyle>
 <a:ArrowStyle>4371</a:ArrowStyle>
 <a:LineColor>11881048</a:LineColor>
@@ -1545,9 +1545,9 @@ DESTINATION 0 新宋体,8,N</a:FontList>
 </o:RelationshipSymbol>
 <o:EntitySymbol Id="o7">
 <a:CreationDate>1788853003</a:CreationDate>
-<a:ModificationDate>1789436533</a:ModificationDate>
+<a:ModificationDate>1791774218</a:ModificationDate>
 <a:IconMode>-1</a:IconMode>
-<a:Rect>((-29037,7186), (613,26962))</a:Rect>
+<a:Rect>((-27895,8037), (-679,26261))</a:Rect>
 <a:LineColor>11881048</a:LineColor>
 <a:FillColor>16759472</a:FillColor>
 <a:ShadowColor>12632256</a:ShadowColor>
@@ -1569,7 +1569,7 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:CreationDate>1788857670</a:CreationDate>
 <a:ModificationDate>1789436538</a:ModificationDate>
 <a:IconMode>-1</a:IconMode>
-<a:Rect>((8451,7876), (43625,32148))</a:Rect>
+<a:Rect>((9919,8838), (42157,31186))</a:Rect>
 <a:LineColor>11881048</a:LineColor>
 <a:FillColor>16759472</a:FillColor>
 <a:ShadowColor>12632256</a:ShadowColor>
@@ -1695,8 +1695,10 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:Code>high_freq</a:Code>
 <a:CreationDate>1789098206</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
-<a:ModificationDate>1789540652</a:ModificationDate>
+<a:ModificationDate>1791792055</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
+<a:Comment>是否高频任务
+这个由计划类型、cron表达式、固定时间间隔与配置中的高频任务时长阈值计算得出</a:Comment>
 <a:DefaultValue>false</a:DefaultValue>
 <a:DataType>BL</a:DataType>
 <a:GlobalObjectID/>
@@ -1707,8 +1709,10 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:Code>cron</a:Code>
 <a:CreationDate>1788855275</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
-<a:ModificationDate>1788925840</a:ModificationDate>
+<a:ModificationDate>1791793878</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
+<a:Comment>cron表达式
+当 job_type 为 cron表达式时必填</a:Comment>
 <a:DataType>VA30</a:DataType>
 <a:Length>30</a:Length>
 <a:GlobalObjectID/>
@@ -1719,8 +1723,10 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:Code>interval_duration</a:Code>
 <a:CreationDate>1788856576</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
-<a:ModificationDate>1788858494</a:ModificationDate>
+<a:ModificationDate>1791793878</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
+<a:Comment>固定间隔时间
+当job_type为固定延迟或固定频率时必填</a:Comment>
 <a:DataType>VA10</a:DataType>
 <a:Length>10</a:Length>
 <a:GlobalObjectID/>
@@ -2234,13 +2240,13 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:Code>jobx-pgsql</a:Code>
 <a:CreationDate>1788921306</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
-<a:ModificationDate>1789620097</a:ModificationDate>
+<a:ModificationDate>1791802028</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:GlobalObjectID/>
 <a:TargetModelURL>file:///%[PRJ_ROOT_DIR]%/jobx-pgsql.pdm</a:TargetModelURL>
 <a:TargetModelID>6166E339-7853-4808-AA49-60304892A29E</a:TargetModelID>
 <a:TargetModelClassID>CDE44E21-9669-11D1-9914-006097355D9B</a:TargetModelClassID>
-<a:TargetModelLastModificationDate>1789620097</a:TargetModelLastModificationDate>
+<a:TargetModelLastModificationDate>1791802028</a:TargetModelLastModificationDate>
 <c:SessionShortcuts>
 <o:Shortcut Ref="o3"/>
 </c:SessionShortcuts>
