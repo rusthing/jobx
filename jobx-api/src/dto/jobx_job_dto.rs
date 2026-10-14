@@ -40,3 +40,15 @@ pub struct JobxJobDto {
     #[db_default]
     pub enabled: bool,
 }
+
+/// # 手动触发计划执行的请求参数
+///
+/// 字段名与其它 DTO 保持一致使用 camelCase（`job_id` ↔ `jobId`），前端无需为这一个接口
+/// 特殊处理命名风格。ID 用 `U64` 而非 `u64`：雪花 ID 是 19 位，超过 JS 安全整数范围，
+/// 按全仓约定以字符串传输，避免前端精度丢失。
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct JobxJobTriggerDto {
+    /// 任务计划ID
+    pub job_id: robotech::api::U64,
+}

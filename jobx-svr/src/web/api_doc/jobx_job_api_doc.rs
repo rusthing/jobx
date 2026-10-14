@@ -9,6 +9,7 @@ use robotech::macros::api_doc;
     get_by_id,
     get_by_query_dto,
     list_by_query_dto,
-    page_by_query_dto
+    page_by_query_dto,
+    trigger
 )]
 pub struct JobxJobApiDoc;

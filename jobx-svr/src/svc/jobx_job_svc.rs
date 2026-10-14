@@ -12,6 +12,11 @@ use std::str::FromStr;
 use tracing::{info, warn};
 use wheel_rs::time_utils::now_ms;
 
+use jobx_api::dic::TaskType;
+use jobx_api::dto::JobxTaskAddDto;
+use jobx_api::vo::JobxTaskVo;
+use crate::svc::JobxTaskSvc;
+
 /// # 任务计划服务
 ///
 /// 负责任务计划的增删改查、调度计算以及定时扫描发布到 Redis Stream。
@@ -405,6 +410,45 @@ impl JobxJobSvc {
 
         JobxJobDao::update(active_model, db).await?;
         Ok(())
+    }
+
+    /// # 手动触发计划执行
+    ///
+    /// 根据计划 ID 创建一条立即执行的任务记录。
+    #[log_call]
+    pub async fn trigger(
+        job_id: U64,
+        user_id: U64,
+        current_ms: Option<U64>,
+    ) -> Result<Ro<JobxTaskVo>, SvcError> {
+        let db = get_db_conn()?;
+        let job_ro = JobxJobSvc::get_by_id(job_id, Some(db.as_ref())).await?;
+        let job = job_ro.extra.ok_or_else(|| SvcError::NotFound("计划不存在".to_string()))?;
+
+        let now = current_ms.unwrap_or(U64(now_ms()));
+
+        // 注意：不要设置 `_current_ms`。它只映射 `create_ms`，一旦显式赋值就会绕过 dao
+        // `insert` 里「create_ms 未设置时同步填充 create_ms/update_ms」的兜底逻辑，
+        // 导致 `update_ms`（not null 且无默认值）落库 NULL 而报错。
+        // 审计字段交给 dao 统一填充，与 worker 的 take 路径保持一致。
+        let task_dto = JobxTaskAddDto::builder()
+            .task_type(TaskType::Immediate)
+            .job_id(Some(job_id))
+            .assign_ms(now)
+            .scheduled_exec_start_ms(Some(now))
+            .executor_code(job.executor_code)
+            .exec_params(job.params)
+            .job_type(job.job_type)
+            .high_freq(job.high_freq)
+            .cron(job.cron)
+            .interval_duration(job.interval_duration)
+            .valid_begin_ms(job.valid_begin_ms)
+            .valid_end_ms(job.valid_end_ms)
+            .assign_lead_ms(job.assign_lead_ms)
+            ._current_user_id(user_id)
+            .build();
+
+        JobxTaskSvc::add(task_dto, Some(db.as_ref())).await
     }
 
     /// # 扫描可发布任务并推送到 Redis Stream
