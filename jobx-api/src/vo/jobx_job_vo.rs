@@ -32,6 +32,10 @@ pub struct JobxJobVo {
     pub assign_lead_ms: Option<u32>,
     /// 下次分派时间戳
     pub next_assign_ms: Option<u64>,
+    /// Stream长度上限
+    /// 发布该计划的消息时使用的 Stream 长度上限（MAXLEN ~ N）
+    /// 为空时采用调度器的全局默认值（jobx-scheduler.stream-max-len，默认 10000）
+    pub stream_max_len: Option<u32>,
     /// 备注
     pub remark: Option<String>,
     /// 启用

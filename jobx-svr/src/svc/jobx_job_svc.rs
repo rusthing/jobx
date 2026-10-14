@@ -6,7 +6,7 @@ use jobx_api::dto::JobxJobModifyDto;
 use robotech::api;
 use robotech::db::get_db_conn;
 use robotech::macros::svc;
-use robotech::redis::publish_to_stream_if_not_exists;
+use robotech::redis::publish_to_stream_with_maxlen;
 use sea_orm::ActiveValue;
 use std::str::FromStr;
 use tracing::{info, warn};
@@ -410,12 +410,43 @@ impl JobxJobSvc {
     /// # 扫描可发布任务并推送到 Redis Stream
     ///
     /// 查询当前时间窗口内 `next_assign_ms` 到期的任务，序列化为 JSON 后
-    /// 以 `{stream_key}:{executor_code}` 为 key 调用 `publish_to_stream_if_not_exists` 幂等发布。
+    /// 以 `{stream_key}:{executor_code}` 为 key 发布到 Redis Stream。
     /// 每次发布在独立的 tokio 任务中执行，失败自动重试（次数与间隔由配置控制）。
+    ///
+    /// ## 幂等性
+    ///
+    /// 去重依赖 `list_publishable` 里的 `NOT EXISTS(jobx_task...)` 条件：
+    /// 只有当「该 job 的当前分派时刻还没有对应的 `jobx_task` 行」时才会被选中
+    /// （条件写法有两个坑，见 [`JobxJobDao::list_publishable`] 的文档）。
+    /// 但**从发布到 worker 成功 `take` 之间**流里还没有任何 `jobx_task` 行，
+    /// 同一 job 会在后续每轮扫描中被重复选中，从而产生重复消息。
+    /// 这是**有意接受**的代价，因为重复消息不会造成重复执行：
+    /// - 消息 payload 是**发布那一刻的快照**，重复消息携带的 `next_assign_ms` 完全相同，
+    ///   因此它们算出的 `scheduled_exec_start_ms` 也完全相同，
+    ///   第二条起会被 `jobx_task` 的 `unique (job_id, scheduled_exec_start_ms)` 约束挡掉；
+    /// - `take` 与 `recalc_next_assign_ms` 在同一事务内，insert 失败即回滚，
+    ///   `next_assign_ms` 不会因为重复消息而多推进。
+    ///
+    /// 也就是说去重条件的作用只是**少发几条注定会被挡掉的重复消息**，
+    /// 真正的正确性兜底是那条唯一约束。
+    ///
+    /// 若重复消息量很大（worker 长时间掉线后恢复），可以打开执行器的
+    /// `last_only`，让 worker 一批只处理最后一条，直接把积压压掉。
+    ///
+    /// 作为对照，原先用的 `publish_to_stream_if_not_exists`（`XLEN==0` 才发）看似能去重，
+    /// 实则把 Stream 变成了「整个生命周期只能装一条消息」的单槽位 ——
+    /// `XACK` 不删 Stream 条目，而本仓没有任何 `XDEL`/`XTRIM` 调用，
+    /// 于是第一次发布之后 `XLEN` 永远 ≥ 1，后续发布全部被静默拒绝。
+    ///
+    /// ## 长度控制
+    ///
+    /// 发布时带 `MAXLEN ~ stream_max_len` 近似裁剪，防止 Stream 无限增长。
+    /// `stream_max_len` **优先取计划自身的 `jobx_job.stream_max_len`**，
+    /// 该列为空时回落到 `JobxSchedulerConfig::stream_max_len`。
     ///
     /// ## 参数
     ///
-    /// * `config` - 调度配置（含 stream_key、时间窗口、重试次数与间隔等参数）。
+    /// * `config` - 调度配置（含 stream_key、时间窗口、重试次数与间隔、Stream 长度上限等参数）。
     /// * `db` - 数据库连接。
     ///
     /// ## 返回值
@@ -445,6 +476,13 @@ impl JobxJobSvc {
             let stream_key = config.executor_key.clone();
             let publish_max_retries = config.publish_max_retries;
             let publish_retry_interval = config.publish_retry_interval;
+            // 长度上限优先取计划自己的 `stream_max_len`，为空时回落到配置文件的默认值。
+            // 让单个计划可以覆盖全局值：突发量特别大的计划调大以免自己的消息被裁掉，
+            // 只跑一次的临时计划调小以免长期占位。
+            let stream_max_len = job
+                .stream_max_len
+                .map(|v| v.value() as usize)
+                .unwrap_or(config.stream_max_len);
             tokio::spawn(async move {
                 let key = format!("{}:{}", stream_key, job.executor_code);
                 let payload = match serde_json::to_string(&job) {
@@ -460,7 +498,13 @@ impl JobxJobSvc {
 
                 let mut published = false;
                 for attempt in 0..publish_max_retries {
-                    match publish_to_stream_if_not_exists(&key, &[("payload", &payload)]).await {
+                    match publish_to_stream_with_maxlen(
+                        &key,
+                        &[("payload", &payload)],
+                        stream_max_len,
+                    )
+                    .await
+                    {
                         Ok(Some(msg_id)) => {
                             info!(
                                 "发布任务到 Redis Stream: key={key}, msg_id={msg_id}, payload={payload}",
@@ -469,7 +513,8 @@ impl JobxJobSvc {
                             break;
                         }
                         Ok(None) => {
-                            warn!("任务在Redis Stream中已存在: key={key}, payload={payload}",);
+                            // 未使用 NOMKSTREAM，理论上不会走到这里
+                            warn!("发布任务到 Redis Stream 未返回消息ID: key={key}");
                             published = true;
                             break;
                         }

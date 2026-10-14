@@ -20,6 +20,7 @@ create table jobx_job (
    executor_code        VARCHAR(50)          not null,
    assign_lead_ms       INT4                 null,
    next_assign_ms       INT8                 null,
+   stream_max_len       INT4                 null,
    remark               VARCHAR(50)          null,
    enabled              BOOL                 not null default true,
    creater_id           INT8                 not null,
@@ -77,6 +78,10 @@ comment on column jobx_job.assign_lead_ms is
 comment on column jobx_job.next_assign_ms is
 '下次分派时间戳';
 
+comment on column jobx_job.stream_max_len is
+'发布该计划的消息时使用的 Stream 长度上限（MAXLEN ~ N）
+为空时采用配置文件中 jobx.scheduler.stream-max-len 的默认值';
+
 comment on column jobx_job.remark is
 '备注';
 
@@ -112,7 +117,7 @@ create table jobx_task (
    status               INT2                 not null default 0,
    assign_ms            INT8                 not null,
    scheduled_exec_start_ms INT8                 null,
-   exec_detail          VARCHAR(800)         not null,
+   exec_detail          VARCHAR(800)         null,
    exec_start_ms        INT8                 null,
    exec_end_ms          INT8                 null,
    executor_code        VARCHAR(50)          not null,

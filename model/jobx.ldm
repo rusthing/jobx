@@ -1790,6 +1790,19 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:DataType>LI</a:DataType>
 <a:GlobalObjectID/>
 </o:EntityAttribute>
+<o:EntityAttribute Id="o57">
+<a:ObjectID>7FBEE79B-69EB-4FC7-8688-3233B6722151</a:ObjectID>
+<a:Name>Stream长度上限</a:Name>
+<a:Code>stream_max_len</a:Code>
+<a:CreationDate>1791945739</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1791945739</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:Comment>发布该计划的消息时使用的 Stream 长度上限（MAXLEN ~ N）
+为空时采用配置文件中 jobx.scheduler.stream-max-len 的默认值</a:Comment>
+<a:DataType>I</a:DataType>
+<a:GlobalObjectID/>
+</o:EntityAttribute>
 <o:EntityAttribute Id="o26">
 <a:ObjectID>3F755224-ABFC-4049-B364-85A24617FBBF</a:ObjectID>
 <a:Name>备注</a:Name>
@@ -1996,7 +2009,6 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:Modifier>张柏子</a:Modifier>
 <a:DataType>VA800</a:DataType>
 <a:Length>800</a:Length>
-<a:LogicalAttribute.Mandatory>1</a:LogicalAttribute.Mandatory>
 <a:GlobalObjectID/>
 </o:EntityAttribute>
 <o:EntityAttribute Id="o41">

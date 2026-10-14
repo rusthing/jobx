@@ -4786,6 +4786,22 @@ DAT 1788921306</a:History>
 <a:Length>8</a:Length>
 <a:GlobalObjectID/>
 </o:Column>
+<o:Column Id="o59">
+<a:ObjectID>FF1EC5A5-ADB6-4E13-BB84-E88896FEE104</a:ObjectID>
+<a:Name>Stream长度上限</a:Name>
+<a:Code>stream_max_len</a:Code>
+<a:CreationDate>1791945739</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1791945739</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:Comment>发布该计划的消息时使用的 Stream 长度上限（MAXLEN ~ N）
+为空时采用配置文件中 jobx.scheduler.stream-max-len 的默认值</a:Comment>
+<a:History>ORG {7FBEE79B-69EB-4FC7-8688-3233B6722151}
+DAT 1791945739</a:History>
+<a:DataType>INT4</a:DataType>
+<a:Length>4</a:Length>
+<a:GlobalObjectID/>
+</o:Column>
 <o:Column Id="o24">
 <a:ObjectID>0F02944E-7680-4B40-92BB-399982CDAB11</a:ObjectID>
 <a:Name>备注</a:Name>
@@ -5097,7 +5113,6 @@ DAT 1788940743</a:History>
 DAT 1789108744</a:History>
 <a:DataType>VARCHAR(800)</a:DataType>
 <a:Length>800</a:Length>
-<a:Column.Mandatory>1</a:Column.Mandatory>
 <a:GlobalObjectID/>
 </o:Column>
 <o:Column Id="o43">

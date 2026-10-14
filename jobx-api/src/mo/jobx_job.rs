@@ -21,6 +21,7 @@ pub struct Model {
     pub executor_code: String,
     pub assign_lead_ms: Option<i32>,
     pub next_assign_ms: Option<i64>,
+    pub stream_max_len: Option<i32>,
     pub remark: Option<String>,
     pub enabled: bool,
     pub creater_id: i64,
