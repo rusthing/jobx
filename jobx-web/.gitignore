@@ -1,0 +1,17 @@
+# 依赖与构建产物
+node_modules/
+dist/
+
+# tsc -b 的增量编译信息
+*.tsbuildinfo
+
+# 本地环境变量
+.env.development
+.env.production
+.env.local
+
+# 编辑器 / 系统
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
