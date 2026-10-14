@@ -1,4 +1,5 @@
 mod api_doc;
+mod assets;
 mod ctrl;
 mod router;
 

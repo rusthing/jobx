@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 
 /// # 该函数将配置文件从源位置复制到目标目录中
 ///
@@ -23,6 +24,8 @@ fn main() {
     // println!(
     //     "cargo:warning=PROJECT_ROOT: {project_root:?} OUT_DIR: {out_dir} dest_path: {dest_dir_path:?}"
     // );
+
+    setup_web_frontend(project_root);
 
     const CONFIG_EXTS: &[&str] = &["toml", "json", "json5", "yml", "yaml", "ini", "ron"];
 
@@ -117,5 +120,73 @@ fn copy_file(project_root: &str, src_file_name: &str, src_file_ext: &str, dest_p
         println!("cargo:rerun-if-changed={src_file_name}");
         // 复制文件到目的地
         fs::copy(src_file_path, dest_path).expect("Failed to copy app file");
+    }
+}
+
+/// # 处理 jobx-web 前端产物的构建与变更监听
+///
+/// `rust-embed` 在**编译期**把 `../jobx-web/dist` 读进二进制，所以前端产物变化后必须
+/// 重新编译才会生效。这里做三件事：
+///
+/// 1. 声明 `rerun-if-changed`：前端产物 / 构建配置变了就让 `cargo build` 重新编译，
+///    避免改了前端但二进制里还是旧页面。
+/// 2. 产物缺失且本地已装好依赖时，顺手跑一次 `vite build`（可用 `JOBX_WEB_SKIP_BUILD=1` 关掉）。
+/// 3. 实在构建不了只发 `cargo:warning`，绝不 panic —— 没有 node 的环境照样能 `cargo build`，
+///    只是页面会返回「未构建」提示（见 `src/web/assets.rs`）。
+fn setup_web_frontend(project_root: &str) {
+    let web_dir = Path::new(project_root).join("../jobx-web");
+    let dist_dir = Path::new(project_root).join("../jobx-web/dist");
+
+    // 前端产物目录整体监听（含新增/删除文件），保证重新 build 时带上最新页面
+    println!("cargo:rerun-if-changed={}", dist_dir.display());
+    // 构建配置也监听：换 base、换端口代理等都会改变产物
+    for name in ["package.json", "vite.config.ts", "index.html", ".env.production"] {
+        let path = web_dir.join(name);
+        if path.exists() {
+            println!("cargo:rerun-if-changed={}", path.display());
+        }
+    }
+
+    if std::env::var("JOBX_WEB_SKIP_BUILD").as_deref() == Ok("1") {
+        return;
+    }
+
+    // 已经构建过就不再自动构建，避免每次 cargo build 都跑一遍 vite
+    if dist_dir.join("index.html").exists() {
+        return;
+    }
+
+    if !web_dir.join("package.json").exists() {
+        println!(
+            "cargo:warning=未找到 jobx-web 前端项目，页面将返回「未构建」提示；\
+             如需页面请确认 jobx/jobx-web 目录存在"
+        );
+        return;
+    }
+
+    // 只在依赖已安装（node_modules/.bin/vite 存在）时才自动构建：
+    // 不会悄悄联网装依赖，也不会在没网的环境里卡住。
+    let vite_bin = web_dir.join("node_modules/.bin/vite");
+    if !vite_bin.exists() {
+        println!(
+            "cargo:warning=jobx-web/dist 不存在。请先执行：cd jobx-web && pnpm install && pnpm build"
+        );
+        return;
+    }
+
+    println!("cargo:warning=jobx-web/dist 不存在，尝试自动构建前端（可用 JOBX_WEB_SKIP_BUILD=1 跳过）...");
+    let status = Command::new(&vite_bin)
+        .arg("build")
+        .current_dir(&web_dir)
+        .status();
+    match status {
+        Ok(s) if s.success() => {
+            println!("cargo:warning=jobx-web 前端构建完成 ✅");
+        }
+        _ => {
+            println!(
+                "cargo:warning=jobx-web 前端自动构建失败，请手动执行：cd jobx-web && pnpm run build"
+            );
+        }
     }
 }

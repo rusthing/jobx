@@ -9,6 +9,21 @@ use wheel_rs::serde::duration_option_serde;
 ///
 /// 用于客户端在配置文件中声明要注册的任务计划。
 /// 服务启动时会读取所有配置的计划，通过 jobx API 注册到服务端。
+///
+/// ## `_current_user_id` 与「系统操作者」
+///
+/// 计划注册是**系统行为**（没有人登录，也没有前端在操作），所以 `_current_user_id`
+/// 走 ghost 显式填 `SYS_OPERATOR_USER_ID`，而不是 `Default::default()`：
+///
+/// - ghost 的 action 会在 `#[owned_into(JobxJobAddDto)]` 生成的
+///   `From<JobxJobConfig> for JobxJobAddDto` 里展开成 `_current_user_id: <表达式>`；
+/// - 这个值最终被 `#[feign]` 生成的 `build_headers` 塞进 `X-User-Id` 请求头，
+///   服务端 `get_current_user_id()` 读回头填 `creater_id` / `updater_id`；
+/// - 写成常量的目的是**让意图显式**：以前用 `Default::default()` 恰好得到
+///   `U64(0)`，与 `SYS_OPERATOR_USER_ID` 数值相同纯属巧合，一旦 `U64` 的
+///   `Default` 实现变化或换成别的字段类型，计划就会以一个「随机」的用户ID落库。
+///
+/// 若将来要换成真实的管理员账号，只改这一行即可。
 #[derive(o2o::o2o, Debug, Clone, Serialize, Deserialize, Setters, TypedBuilder)]
 #[owned_into(jobx_api::dto::JobxJobAddDto)]
 #[ghosts(
@@ -19,7 +34,7 @@ use wheel_rs::serde::duration_option_serde;
     enabled: Default::default(),
     id: Default::default(),
     _current_ms: Default::default(),
-    _current_user_id: Default::default(),
+    _current_user_id: robotech::cst::user_id_cst::SYS_OPERATOR_USER_ID.into(),
 )]
 #[serde(rename_all = "kebab-case")]
 pub struct JobxJobConfig {
