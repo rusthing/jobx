@@ -1,9 +1,9 @@
-#[cfg(feature = "server")]
-use sea_orm::{ColIdx, DbErr, QueryResult, TryGetError, TryGetable};
 use robotech::macros::dic;
 use strum::{AsRefStr, Display, EnumString};
 
-#[dic]
+/// 被 `JobxJobVo` / `JobxTaskVo` 用作字段，所以必须声明 `default`
+/// （`#[vo]` 会生成 `i16 → 枚举` 的 `From<i16>`，越界需要兜底变体）。
+#[dic(default = Manual)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsRefStr, Display, EnumString)]
 #[strum(serialize_all = "kebab-case")]
 pub enum JobType {
@@ -15,47 +15,4 @@ pub enum JobType {
     FixedDelay = 2,
     /// 固定频率
     FixedRate = 3,
-}
-
-impl Default for JobType {
-    fn default() -> Self {
-        Self::Manual
-    }
-}
-
-impl JobType {
-    pub const fn value(self) -> i16 {
-        self as i16
-    }
-
-    pub fn from_i16(value: i16) -> Option<Self> {
-        match value {
-            0 => Some(JobType::Manual),
-            1 => Some(JobType::Cron),
-            2 => Some(JobType::FixedDelay),
-            3 => Some(JobType::FixedRate),
-            _ => None,
-        }
-    }
-}
-
-impl From<JobType> for i16 {
-    fn from(v: JobType) -> Self {
-        v as i16
-    }
-}
-
-impl From<i16> for JobType {
-    fn from(v: i16) -> Self {
-        Self::from_i16(v).unwrap_or_default()
-    }
-}
-
-#[cfg(feature = "server")]
-impl TryGetable for JobType {
-    fn try_get_by<I: ColIdx>(res: &QueryResult, idx: I) -> Result<Self, TryGetError> {
-        let value = <i16 as TryGetable>::try_get_by(res, idx)?;
-        Self::from_i16(value)
-            .ok_or_else(|| TryGetError::DbErr(DbErr::Custom(format!("invalid job type value: {value}"))))
-    }
 }
