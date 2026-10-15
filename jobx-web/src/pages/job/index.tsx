@@ -4,7 +4,7 @@ import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { getJobPage, addJob, modifyJob, deleteJob, triggerJob } from '../../api/job';
 import type { JobxJobVo, JobQuery, JobxJobAddDto, JobxJobModifyDto, JobType } from '../../api/types';
-import { JOB_TYPE_MAP, JOB_TYPE_OPTIONS } from '../../utils/enum';
+import { JOB_TYPE, JOB_TYPE_MAP, JOB_TYPE_OPTIONS, labelOf } from '../../utils/enum';
 import { formatTimestamp } from '../../utils/format';
 
 export default function JobPage() {
@@ -109,7 +109,7 @@ export default function JobPage() {
     { title: 'ID', dataIndex: 'id', ellipsis: true, width: 160 },
     { title: '名称', dataIndex: 'name', width: 180 },
     { title: '执行器编码', dataIndex: 'executorCode', width: 140 },
-    { title: '计划类型', dataIndex: 'jobType', width: 100, render: (v) => JOB_TYPE_MAP[v as string] || v },
+    { title: '计划类型', dataIndex: 'jobType', width: 100, render: (v) => labelOf(JOB_TYPE_MAP, v) },
     { title: 'cron', dataIndex: 'cron', width: 140 },
     { title: '间隔(ms)', dataIndex: 'intervalDuration', width: 100 },
     { title: '提前(ms)', dataIndex: 'assignLeadMs', width: 100 },
@@ -150,9 +150,9 @@ export default function JobPage() {
         />
         <Select
           placeholder="计划类型"
-          options={[{ value: '', label: '全部' }, ...JOB_TYPE_OPTIONS]}
-          value={filters.jobType || ''}
-          onChange={(v) => setFilters({ ...filters, jobType: (v || undefined) as JobType | undefined })}
+          options={JOB_TYPE_OPTIONS}
+          value={filters.jobType}
+          onChange={(v) => setFilters({ ...filters, jobType: v as JobType | undefined })}
           style={{ width: 120 }}
           allowClear
         />
@@ -206,12 +206,12 @@ export default function JobPage() {
           </Form.Item>
           <Form.Item noStyle shouldUpdate={(prev, cur) => prev.jobType !== cur.jobType}>
             {({ getFieldValue }) => {
-              const jobType = getFieldValue('jobType');
-              return jobType === 'Cron' ? (
+              const jobType = getFieldValue('jobType') as JobType | undefined;
+              return jobType === JOB_TYPE.Cron ? (
                 <Form.Item name="cron" label="Cron 表达式" rules={[{ required: true }]}>
                   <Input />
                 </Form.Item>
-              ) : (jobType === 'FixedDelay' || jobType === 'FixedRate') ? (
+              ) : jobType === JOB_TYPE.FixedDelay || jobType === JOB_TYPE.FixedRate ? (
                 <Form.Item name="intervalDuration" label="固定间隔（毫秒）" rules={[{ required: true }]}>
                   <InputNumber style={{ width: '100%' }} min={0} />
                 </Form.Item>

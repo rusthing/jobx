@@ -15,9 +15,13 @@ export interface PageRx<T> {
   list: T[];
 }
 
-export type JobType = 'Manual' | 'Cron' | 'FixedDelay' | 'FixedRate';
-export type TaskStatus = 'Running' | 'Success' | 'Failed';
-export type TaskType = 'Immediate' | 'Scheduled';
+/**
+ * 字典枚举统一走**整数**（后端 `#[dic]` 宏把 serde 表示固定成变体判别式）。
+ * 传变体名字符串会被后端拒绝，所以这里用数字字面量联合类型，编译期就能挡住。
+ */
+export type JobType = 0 | 1 | 2 | 3; // 0=手动分派 1=cron表达式 2=固定延迟 3=固定频率
+export type TaskStatus = 0 | 1 | 2; // 0=运行中 1=成功 2=失败
+export type TaskType = 1 | 2; // 1=立即执行 2=计划执行
 
 export interface JobxJobVo {
   id: string;

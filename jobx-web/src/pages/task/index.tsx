@@ -3,7 +3,14 @@ import { Table, Input, Select, Space, Drawer } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { getTaskPage } from '../../api/task';
 import type { JobxTaskVo, TaskQuery, TaskStatus, TaskType } from '../../api/types';
-import { JOB_TYPE_MAP, TASK_STATUS_MAP, TASK_TYPE_MAP, TASK_STATUS_OPTIONS, TASK_TYPE_OPTIONS } from '../../utils/enum';
+import {
+  JOB_TYPE_MAP,
+  TASK_STATUS_MAP,
+  TASK_TYPE_MAP,
+  TASK_STATUS_OPTIONS,
+  TASK_TYPE_OPTIONS,
+  labelOf,
+} from '../../utils/enum';
 import { formatTimestamp, calcDuration } from '../../utils/format';
 
 export default function TaskPage() {
@@ -47,11 +54,11 @@ export default function TaskPage() {
 
   const columns: ColumnsType<JobxTaskVo> = [
     { title: 'ID', dataIndex: 'id', ellipsis: true, width: 160 },
-    { title: '任务类型', dataIndex: 'taskType', width: 100, render: (v) => TASK_TYPE_MAP[v as string] || v },
+    { title: '任务类型', dataIndex: 'taskType', width: 100, render: (v) => labelOf(TASK_TYPE_MAP, v) },
     { title: '计划ID', dataIndex: 'jobId', width: 160, ellipsis: true },
-    { title: '状态', dataIndex: 'status', width: 80, render: (v) => TASK_STATUS_MAP[v as string] || v },
+    { title: '状态', dataIndex: 'status', width: 80, render: (v) => labelOf(TASK_STATUS_MAP, v) },
     { title: '执行器编码', dataIndex: 'executorCode', width: 140 },
-    { title: '计划类型', dataIndex: 'jobType', width: 100, render: (v) => JOB_TYPE_MAP[v as string] || v },
+    { title: '计划类型', dataIndex: 'jobType', width: 100, render: (v) => labelOf(JOB_TYPE_MAP, v) },
     { title: '执行详情', dataIndex: 'execDetail', ellipsis: true, width: 200 },
     { title: '耗时', width: 100, render: (_, r) => calcDuration(r.execStartMs, r.execEndMs) },
     { title: '分派时间', dataIndex: 'assignMs', width: 160, render: (v) => formatTimestamp(v) },
@@ -79,17 +86,17 @@ export default function TaskPage() {
         />
         <Select
           placeholder="任务状态"
-          options={[{ value: '', label: '全部' }, ...TASK_STATUS_OPTIONS]}
-          value={filters.status || ''}
-          onChange={(v) => setFilters({ ...filters, status: (v || undefined) as TaskStatus | undefined })}
+          options={TASK_STATUS_OPTIONS}
+          value={filters.status}
+          onChange={(v) => setFilters({ ...filters, status: v as TaskStatus | undefined })}
           style={{ width: 120 }}
           allowClear
         />
         <Select
           placeholder="任务类型"
-          options={[{ value: '', label: '全部' }, ...TASK_TYPE_OPTIONS]}
-          value={filters.taskType || ''}
-          onChange={(v) => setFilters({ ...filters, taskType: (v || undefined) as TaskType | undefined })}
+          options={TASK_TYPE_OPTIONS}
+          value={filters.taskType}
+          onChange={(v) => setFilters({ ...filters, taskType: v as TaskType | undefined })}
           style={{ width: 120 }}
           allowClear
         />
@@ -122,13 +129,13 @@ export default function TaskPage() {
         {detailRecord && (
           <Space direction="vertical" style={{ width: '100%' }}>
             <p><b>ID：</b>{detailRecord.id}</p>
-            <p><b>任务类型：</b>{TASK_TYPE_MAP[detailRecord.taskType]}</p>
+            <p><b>任务类型：</b>{labelOf(TASK_TYPE_MAP, detailRecord.taskType)}</p>
             <p><b>计划ID：</b>{detailRecord.jobId}</p>
-            <p><b>状态：</b>{TASK_STATUS_MAP[detailRecord.status]}</p>
+            <p><b>状态：</b>{labelOf(TASK_STATUS_MAP, detailRecord.status)}</p>
             <p><b>执行器编码：</b>{detailRecord.executorCode}</p>
             <p><b>执行器实例：</b>{detailRecord.executorInstance || '-'}</p>
             <p><b>执行参数：</b><pre style={{ whiteSpace: 'pre-wrap' }}>{detailRecord.execParams || '-'}</pre></p>
-            <p><b>计划类型：</b>{JOB_TYPE_MAP[detailRecord.jobType]}</p>
+            <p><b>计划类型：</b>{labelOf(JOB_TYPE_MAP, detailRecord.jobType)}</p>
             <p><b>cron：</b>{detailRecord.cron || '-'}</p>
             <p><b>固定间隔：</b>{detailRecord.intervalDuration != null ? `${detailRecord.intervalDuration}ms` : '-'}</p>
             <p><b>分派提前：</b>{detailRecord.assignLeadMs != null ? `${detailRecord.assignLeadMs}ms` : '-'}</p>

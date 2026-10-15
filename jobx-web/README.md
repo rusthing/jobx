@@ -70,7 +70,11 @@ corepack pnpm build      # 等价于 tsc -b && vite build，产物在 dist/
 ## 关键约定
 
 - **ID 与时间戳全是字符串**：后端使用 19 位雪花 ID，超出 JS 安全整数范围，前端全程以 `string` 处理。
-- **枚举值是变体名字符串**：如 `jobType: "FixedRate"`、`status: "Success"`、`taskType: "Immediate"`。
+- **字典枚举是整数**：后端字典枚举用 `#[dic]` 宏把 serde 表示固定成**变体判别式**，
+  所以 `jobType: 3`（不是 `"FixedRate"`）、`status: 1`（不是 `"Success"`）、`taskType: 1`（不是 `"Immediate"`）。
+  取值对照见 `src/utils/enum.ts` 的 `JOB_TYPE` / `TASK_STATUS` / `TASK_TYPE`；
+  `src/api/types.ts` 里也用数字字面量联合类型把非法取值挡在编译期。
+  **传字符串会被后端拒绝**（反序列化报「无效的 X 值」）。新增取值只能往后追加，不能改动已有数字。
 - **`_orderBy` 使用 snake_case 数据库列名**：如 `create_ms:desc`。
 - **错误提示只在一个地方弹**：`src/api/http.ts` 统一判定后端 `Ro.result !== 1` 并 `message.error(msg)`，页面的 `catch` 只用于收尾（关 loading、关弹窗），不要再各自调 `message.error`。需要页面自己定制的传 `silent: true`。
 
