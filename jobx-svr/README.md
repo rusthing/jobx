@@ -13,44 +13,12 @@ JobX 服务端应用，基于 Rust 生态构建的任务调度服务系统。提
 - **信号控制** - 支持 start / restart / stop / kill 信号
 - **服务注册** - 支持 Consul 服务注册与配置中心
 - **多数据库** - 支持 PostgreSQL / MySQL / SQLite
-- **内嵌前端** - `jobx-web` 构建产物通过 `rust-embed` 编译进二进制，同一个进程提供接口和页面
 
-## 内嵌前端（jobx-web）
+## 前端
 
-`jobx-svr` 把 `../jobx-web/dist` 在**编译期**嵌入二进制，运行时由 `src/web/assets.rs`
-统一对外提供页面，不需要额外部署 nginx 或静态托管。
-
-```bash
-# 1. 构建前端（产物在 jobx/jobx-web/dist）
-cd jobx-web && corepack pnpm install && corepack pnpm build
-
-# 2. 编译（build.rs 已把 ../jobx-web/dist 纳入 rerun-if-changed）
-cd ../jobx-svr && cargo build
-```
-
-`build.rs` 的行为：
-
-| 情况 | 行为 |
-|------|------|
-| `dist/index.html` 已存在 | 直接编译进二进制 |
-| `dist/` 不存在但 `node_modules/.bin/vite` 存在 | 自动跑一次 `vite build` |
-| 两者都没有 | 只发 `cargo:warning`，嵌入空资源表，**`cargo build` 仍成功** |
-
-`JOBX_WEB_SKIP_BUILD=1 cargo build` 可关掉自动构建。
-
-### 路由行为
-
-页面走 `Router::fallback` 兜底（`src/web/assets.rs`）：
-
-- 命中静态文件 → 按 MIME 返回，`assets/` 下带哈希的资源长缓存（`immutable`），`index.html` 用 `no-cache`
-- 未命中且 `Accept` 含 `text/html` → 回落 `index.html`，交给前端 `BrowserRouter`（如 `/job`、`/task`）
-- 未命中且 `Accept` 不含 `text/html`（接口调用）→ 404，避免拼错接口路径时拿到一个 200 的 HTML
-
-> axum 规定同一层级只能有一个自定义 fallback。`assets.rs` 是全仓唯一设置
-> `Router::fallback` 的地方，若将来别的模块也要设 fallback，`Router::merge` 会直接 panic。
-
-> `rust-embed` 是编译期快照：改了前端必须重新 `cargo build` 才生效。
-
+前端项目 `jobx-web` **独立运行**，不随本服务一起部署。开发时用 Vite dev server（默认 5173）
+通过 `server.proxy` 把接口请求转发到本服务（默认 9001），生产环境由网关 / 静态托管自行转发。
+本服务只提供 RESTful API 与 Swagger UI。
 
 ## 项目结构
 

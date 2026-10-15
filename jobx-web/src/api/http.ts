@@ -9,7 +9,7 @@ export interface RequestConfig extends AxiosRequestConfig {
 }
 
 export const raw = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE || '/api',
+  baseURL: import.meta.env.VITE_API_BASE || '',
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -26,10 +26,22 @@ raw.interceptors.request.use((config) => {
  * -2 警告 / -3 失败）都是失败，错误说明就在 `msg` 字段里。在这里统一判定并 reject，
  * 业务侧拿到的就是一个正常的 Promise 异常，不需要在每个页面重复写
  * `if (result !== 1) ...`，也不需要每处都去解 `msg`。
+ *
+ * 另外，**拿到的不是 `Ro` 结构时也要报错**。典型场景：请求没被转发到 `jobx-svr`
+ * （接口前缀 / 代理配置不对），dev server 按 SPA 规则回落了 `index.html`，
+ * 于是 HTTP 200 但 body 是 HTML 字符串。以前这种情况会被当成「成功」，
+ * `extra` 取不到 → 返回 null → 页面**静默空数据且不报错**，极难排查；
+ * 现在直接抛出可读错误。
  */
 function assertRoOk(res: { data: unknown }): void {
   const body = res.data as Ro<unknown> | undefined;
-  if (body && typeof body === 'object' && typeof body.result === 'number' && body.result !== 1) {
+  if (!body || typeof body !== 'object' || typeof body.result !== 'number') {
+    throw new Error(
+      '响应格式异常：未拿到后端统一响应体。请检查 VITE_API_BASE 与 vite.config.ts 的 proxy 前缀是否一致，' +
+        '确保请求被转发到了 jobx-svr（而不是被前端 dev server 回落成 index.html）',
+    );
+  }
+  if (body.result !== 1) {
     throw new Error(body.msg || '请求失败');
   }
 }

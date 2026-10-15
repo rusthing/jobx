@@ -38,10 +38,6 @@ utoipa-swagger-ui = { workspace = true, features = ["axum", "vendored"] }
 cron = { workspace = true }
 humantime = { workspace = true }
 
-# 把 jobx-web 构建产物编译进二进制，由本服务直接提供页面。
-# 开 debug-embed：debug 包也是真嵌入，不依赖运行时磁盘上的 dist/。
-rust-embed = { workspace = true, features = ["debug-embed"] }
-
 wheel-rs = { workspace = true }
 idworker = { workspace = true, features = ["utils"] }
 robotech = { workspace = true, features = ["db", "config-center", "registry-center", "macros", "redis"] }

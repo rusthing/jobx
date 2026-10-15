@@ -1,7 +1,7 @@
 # JobX Web 管理平台
 
 JobX 任务调度系统的后台管理前端，对接 `jobx-svr` 的 RESTful API。
-构建产物由 `jobx-svr` 用 `rust-embed` **编译进二进制**，一个进程同时提供接口和页面，不需要额外部署 nginx 或静态托管。
+前端**独立运行**（开发用 Vite dev server，生产由静态托管 / 网关自行部署），不再编译进 `jobx-svr` 二进制。
 
 ## 技术栈
 
@@ -21,36 +21,45 @@ corepack pnpm install
 corepack pnpm run dev
 ```
 
-开发服务器通过 Vite proxy 把 `/api` 转发到 `http://127.0.0.1:9001`，绕开 CORS。若本地 `jobx-svr` 不在 9001，改 `vite.config.ts` 里的 `target`。
+开发服务器通过 Vite proxy 转发接口请求，绕开 CORS。
 
-## 构建与打包进 jobx-svr
+约定：**`VITE_API_BASE` 与 `vite.config.ts` 里 proxy 的 key 必须一致**。
+接口路径本身不带前缀（如 `/jobx/job/page`），靠 `baseURL` 加上前缀后才会命中 proxy：
+
+| 环境 | `VITE_API_BASE` | proxy key | 最终请求 |
+|------|-----------------|-----------|----------|
+| dev | `/jobx-svr` | `/jobx-svr` | `http://127.0.0.1:9001/jobx/job/page` |
+
+若本地 `jobx-svr` 不在 9001，改 `vite.config.ts` 里的 `target`。
+
+> ⚠️ 如果 `VITE_API_BASE` 为空、而 proxy 只匹配 `/jobx-svr`，请求 `/jobx/job/page` **不会**被转发，
+> Vite 会按 SPA 规则回落 `index.html`（HTTP 200 + `text/html`）。axios 拿到的是 HTML 字符串，
+> `Ro` 判定通过、`extra` 为 `undefined`，最终 `request()` 返回 `null` ——
+> 表现为**页面数据静默为空且不报任何错**，极难排查。
+
+## 构建
 
 ```bash
 corepack pnpm install
 corepack pnpm build      # 等价于 tsc -b && vite build，产物在 dist/
-cd ../jobx-svr && cargo build
 ```
 
-`jobx-svr` 的 `build.rs` 已经把 `../jobx-web/dist` 纳入 `rerun-if-changed`：
-- `dist/` 已存在 → 直接编译进二进制；
-- `dist/` 不存在但 `node_modules/.bin/vite` 存在 → 自动跑一次 `vite build`；
-- 两者都没有 → 只发 `cargo:warning` 并嵌入空资源表，**`cargo build` 照样成功**，访问页面会返回「未构建」提示。
+产物是纯静态文件，交给任意静态托管 / 网关即可，`jobx-svr` 不再内嵌前端。
 
-想跳过自动构建：`JOBX_WEB_SKIP_BUILD=1 cargo build`。
+### 页面路由
 
-注意 `rust-embed` 是**编译期快照**：改了前端必须重新 `cargo build` 才会生效。
-
-### 页面访问方式
+前端用 `BrowserRouter`，静态托管需要把未命中的路径回落 `index.html`：
 
 | 路径 | 说明 |
 |------|------|
 | `/` | 页面入口，默认落在「计划管理」 |
-| `/job` | 计划管理（前端路由，服务端回落 `index.html`） |
-| `/task` | 任务监控（同上） |
-| `/assets/*` | 带内容哈希的静态资源，`Cache-Control: max-age=31536000, immutable` |
-| `/index.html` | 入口文件，`Cache-Control: no-cache` |
+| `/job` | 计划管理 |
+| `/task` | 任务监控 |
+| `/assets/*` | 带内容哈希的静态资源，可长缓存（`max-age=31536000, immutable`） |
+| `/index.html` | 入口文件，需 `no-cache` |
 
-未命中前端路由的**接口调用**不会被前端页面冒充：`Accept` 里没有 `text/html` 时统一返回 404，拼错接口路径不会拿到一个 200 的 HTML。
+注意**别让静态托管的回落规则吃掉接口路径**：`/jobx/**` 必须转发给 `jobx-svr`，
+否则拼错接口路径时会拿到一个 200 的 HTML 页面而不是 404。
 
 ## 功能
 
