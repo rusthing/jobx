@@ -526,7 +526,7 @@ async fn handle_stream_message(
     };
     let user_id: U64 = job.updater_id.into();
     let add_dto = build_task_add_dto(&job, instance_id, user_id);
-    let task = match api_client.task_client.take(&add_dto).await {
+    let task = match api_client.task.take(&add_dto).await {
         Ok(ro) => match ro.extra {
             Some(t) => t,
             None => {
@@ -604,7 +604,7 @@ async fn handle_stream_message(
         .exec_start_ms(Some(exec_start_ms.into()))
         ._current_user_id(user_id)
         .build();
-    if let Err(e) = api_client.task_client.modify(&start_dto).await {
+    if let Err(e) = api_client.task.modify(&start_dto).await {
         warn!("标记任务 {} 开始执行失败: {e:?}", task_id);
     }
 
@@ -810,7 +810,7 @@ async fn report_task_result(
         .build();
 
     for attempt in 0..=retry_count {
-        match api_client.task_client.modify(&dto).await {
+        match api_client.task.modify(&dto).await {
             Ok(_) => return,
             Err(e) if attempt < retry_count => {
                 warn!(
