@@ -25,8 +25,8 @@ o2o = { workspace = true, optional = true }
 validator = { workspace = true, optional = true, features = ["derive"] }
 
 wheel-rs = { workspace = true }
-robotech = { workspace = true, features = ["macros", "db"] }
+robotech = { workspace = true, features = ["macros", "db", "openapi"] }
 
 
 [features]
-server = ["sea-orm", "o2o", "validator", "robotech/macros"]
+server = ["sea-orm", "o2o", "validator", "robotech/macros", "robotech/orm"]
