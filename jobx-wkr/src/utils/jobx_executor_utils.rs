@@ -4,7 +4,7 @@ use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use jobx_api::dic::{JobType, TaskStatus, TaskType};
 use jobx_api::vo::{JobxJobVo, JobxTaskVo};
-use jobx_api_client::api_client::{JobxApiClient, get_jobx_api_client};
+use jobx_api_client::{JobxApiClient, get_jobx_api_client};
 use jobx_api_client::dto::{JobxTaskAddDto, JobxTaskModifyDto};
 use redis::Value as RedisValue;
 use redis::streams::StreamId;
