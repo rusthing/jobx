@@ -1,19 +1,20 @@
 profile = "dev"
 
-[redis]
-url = "redis://:xxxxxxxx@redis:6379"
-
-[db]
-url = "postgres://jobx:jobx@pgsql:5432/jobx"
+#[redis]
+#url = "redis://:xxxxxxxx@redis:6379"
+#
+#[db]
+#url = "postgres://jobx:jobx@pgsql:5432/jobx"
 
 [web]
 port = 9001
 
 [micro-svc.consul]
 base-url = "http://consul:8500"
+[micro-svc.consul.config]
+common-configs = ["redis.toml"]
 [micro-svc.consul.registry]
 
 [id-worker]
 epoch = 1758108749211
-machine-id = 1
-node-id = 1
+node = 1
