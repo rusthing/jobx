@@ -1,8 +1,8 @@
 use anyhow::anyhow;
 use config::Value;
-use idworker::setup_id_worker;
 use jobx_svr::config::AppConfig;
 use jobx_svr::utils::setup_jobx_scheduler;
+use robotech::app::setup_id_worker;
 use robotech::db::setup_db_conn;
 use robotech::macros::{bootstrap, db_migrate, log_call};
 use robotech::redis::setup_redis_conn;
@@ -23,7 +23,7 @@ async fn setup(
     let db_url = app_config.db.get_url();
     db_migrate!(db_url);
 
-    setup_id_worker(app_config.id_worker.clone(), changed)?;
+    setup_id_worker(app_config.id_worker.clone(), changed).await?;
     setup_redis_conn(app_config.redis.clone(), changed).await?;
     setup_db_conn(app_config.db.clone(), changed).await?;
 
