@@ -17,9 +17,9 @@ export type DataMode = "mock" | "live";
 const MODE_KEY = "jobx.data-mode";
 const MODE_EVENT = "jobx:data-mode";
 
-const configuredBase = (import.meta.env.VITE_API_BASE ?? "").trim();
+const hasConfiguredBase = !!(import.meta.env.VITE_API_BASE ?? "").trim();
 
-export const DEFAULT_MODE: DataMode = configuredBase ? "live" : "mock";
+export const DEFAULT_MODE: DataMode = hasConfiguredBase ? "live" : "mock";
 
 export function getDataMode(): DataMode {
   try {
@@ -48,7 +48,7 @@ export function subscribeDataMode(listener: (mode: DataMode) => void): () => voi
 
 export function endpointLabel(): string {
   if (getDataMode() === "mock") return "内存演示数据";
-  return configuredBase || API_BASE;
+  return API_BASE;
 }
 
 const isMock = () => getDataMode() === "mock";

@@ -30,13 +30,59 @@ PROXY 目标不同时：VITE_PROXY_TARGET=http://10.0.0.7:9001 pnpm dev
 顶栏右侧的数据源开关随时可以切回演示数据；选择记在 `localStorage`，切换时会清空查询缓存，不会把两边的数据混在一起。
 
 ```bash
-pnpm build        # 产出 dist/
-pnpm preview      # 本地预览构建产物
+pnpm build        # 产出 dist/；生产口径写在 .env.production
+pnpm preview      # 本地预览构建产物（注意地址是 /jobx-web/，不是站点根）
 pnpm test         # cron 解析 / 预览 / 描述的单元测试
 pnpm typecheck
 ```
 
-部署时把 `dist/` 交给任意静态服务器，并将 `/jobx/*` 反代到服务端即可；`BrowserRouter` 需要 history fallback。
+## 部署到子路径
+
+生产上前端挂在 `/jobx-web`，后端挂在 `/jobx-svr`。**这两件事都要前端配合**，三处配置缺一个就白屏或全 404：
+
+| 配置 | 值 | 决定什么 |
+| --- | --- | --- |
+| `PUBLIC_BASE`（构建期） | `/jobx-web/` | `index.html` 里 `/assets/*.js` 的引用前缀 |
+| 路由 basename | 自动取 `import.meta.env.BASE_URL` | 站内跳转与深链的路径前缀 |
+| `VITE_API_BASE`（构建期） | `/jobx-svr` | 请求实际发往 `/jobx-svr/jobx/job/page` |
+
+前两件事是同一个来源：`PUBLIC_BASE` 决定 Vite 的 `base`，`base` 又决定 `BASE_URL`，所以只填一处。默认值写在 `.env.production`（`pnpm build` 自动读取），临时换位置不用改文件：
+
+```bash
+PUBLIC_BASE=/jobx-web-test/ VITE_API_BASE=/jobx-svr-test pnpm build
+```
+
+nginx（同源部署，推荐）：
+
+```nginx
+location /jobx-web/ {
+    alias /srv/jobx-web/;                        # dist/ 的内容
+    try_files $uri $uri/ /jobx-web/index.html;    # 缺这行，刷新 /jobx-web/jobs 会 404
+}
+
+location /jobx-svr/ {
+    proxy_pass http://127.0.0.1:9001/;            # 末尾斜杠必须有，见下
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+}
+```
+
+`proxy_pass` 末尾那个斜杠是这里最容易踩的坑：jobx-svr 的路由本身就是 `/jobx/job/*`，框架的 `WebServerConfig` 没有 context-path 这类配置，服务端根本不认识 `/jobx-svr` 这一层。带斜杠 = 转发时剥掉前缀，后端看到 `/jobx/job/page`；不带斜杠 = 原样透传，后端看到 `/jobx-svr/jobx/job/page`，全站 404。
+
+`alias` 用不利索的话，`root /srv;` + 目录名 `jobx-web` 效果一样。
+
+**页面和后端不同源时**（不同端口或域名），`VITE_API_BASE` 要给绝对地址，并且后端得开 CORS——注意框架默认只放行 `GET/POST/HEAD`，`PUT`/`DELETE` 和 `X-User-Id` 都要显式加，否则预检就挂：
+
+```toml
+[web.cors]
+allowed-origins = ["http://10.0.0.9:8080"]
+allowed-methods = ["GET", "POST", "PUT", "DELETE"]
+allowed-headers = ["Content-Type", "X-User-Id"]
+```
+
+能同源就别跨域：`X-User-Id` 是自定义头，跨源后每个请求都要多一次预检，而且两套配置容易漂。
+
+**静态服务器配不了 `try_files`**：`VITE_ROUTER=hash pnpm build`，路由退化成 `/jobx-web/#/jobs`，刷新不再 404。hash 模式下 basename 会自动留空（带上去 react-router 匹配不上，整页空白）。
 
 ## 这个前端理解到的 JobX
 
@@ -97,6 +143,6 @@ src/
 
 ## 已知边界
 
-- 统计是**浏览器侧聚合**（最近 400 条执行记录）。后端没有统计接口，界面如实标注口径，不把样本当全量。
+- 统计是**浏览器侧聚合**（最近 1200 条执行记录）。后端没有统计接口，界面如实标注口径，不把样本当全量。
 - 没有鉴权：`X-User-Id` 由使用者自己填，适合内网运维台；接入统一登录时替换 `getOperatorId()` 即可。
 - 轮询而非推送。执行记录页 5s、其余 15s，页面隐藏时 `useNow` 停表、React Query 自动暂停。

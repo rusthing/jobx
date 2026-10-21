@@ -13,7 +13,17 @@ export interface Ro<T> {
   code?: string;
 }
 
-export const API_BASE = (import.meta.env.VITE_API_BASE ?? "").trim() || "/api";
+/**
+ * 接口基址。
+ * - 开发期默认 `/api`，由 Vite 反代到 jobx-svr 并剥掉前缀；
+ * - 生产环境由 `VITE_API_BASE` 给出，通常是同源的 nginx 前缀（如 `/jobx-svr`），
+ *   也可以是跨域的绝对地址（此时后端要开 `[web.cors]`）。
+ * 末尾斜杠统一去掉，避免拼成 `/jobx-svr//jobx/job/page`。
+ */
+const RAW_API_BASE = (import.meta.env.VITE_API_BASE ?? "").trim();
+
+export const API_BASE = (RAW_API_BASE || "/api").replace(/\/+$/, "");
+
 
 const USER_KEY = "jobx.operator-id";
 const DEFAULT_OPERATOR = "1";
@@ -114,7 +124,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   if (!payload) {
     // 静态服务器 / 网关把请求兜底成了 HTML：通常是反代没配好，不是业务错误
     throw new ApiError(
-      `服务返回了非 JSON 响应（HTTP ${response.status}），检查 /jobx/* 是否被反代到 jobx-svr`,
+      `服务返回了非 JSON 响应（HTTP ${response.status}），检查 ${API_BASE}/jobx/* 是否被反代到 jobx-svr`,
       response.status,
     );
   }
