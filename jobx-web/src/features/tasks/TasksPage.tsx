@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Activity, CircleSlash, RefreshCw, Search } from "lucide-react";
 import { PageHeader } from "@/components/page";
@@ -83,6 +83,8 @@ export function TasksPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const openDetail = (task: Task) => setSelected(task);
+  // 抽屉是 memo 化的，onClose 必须是稳定引用（页面每秒会 tick 一次）
+  const closeDetail = useCallback(() => setSelected(null), []);
 
   return (
     <>
@@ -378,7 +380,7 @@ export function TasksPage() {
             ? jobById.get((detail.data ?? selected)?.jobId as string)
             : undefined
         }
-        onClose={() => setSelected(null)}
+        onClose={closeDetail}
       />
     </>
   );

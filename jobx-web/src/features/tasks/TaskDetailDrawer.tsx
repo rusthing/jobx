@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Braces, Clock3, ExternalLink, FileText, Hash } from "lucide-react";
 import { Drawer } from "@/components/ui/Drawer";
@@ -103,7 +103,8 @@ function CodeBlock({
   empty?: string;
   rows?: number;
 }) {
-  const text = value ? prettyJson(value) : empty;
+  // exec_detail 可能是 KB 级 JSON，格式化不该在每次渲染里重跑
+  const text = useMemo(() => (value ? prettyJson(value) : empty), [value, empty]);
   return (
     <pre
       className="overflow-auto rounded-lg border border-line bg-sunken/70 px-3 py-2.5 font-mono text-[11px] leading-relaxed text-ink-soft"
@@ -114,7 +115,7 @@ function CodeBlock({
   );
 }
 
-export function TaskDetailDrawer({
+function TaskDetailDrawerImpl({
   task,
   job,
   onClose,
@@ -270,3 +271,9 @@ export function TaskDetailDrawer({
     </Drawer>
   );
 }
+
+/**
+ * 列表页有个每秒跳动的 `now`（相对时间列），每次 tick 都会让整页重渲染。
+ * memo 之后只要 `task` / `job` / `onClose` 的引用不变，抽屉就不再跟着重渲染。
+ */
+export const TaskDetailDrawer = memo(TaskDetailDrawerImpl);

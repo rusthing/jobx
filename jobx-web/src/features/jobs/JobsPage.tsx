@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   ArrowDownUp,
@@ -155,6 +155,35 @@ export function JobsPage() {
   };
 
   const filtered = keyword || type !== "all" || enabled !== "all" || executor !== "all";
+
+  /*
+   * JobFormDrawer 是 memo 化的（页面上有一个每秒 tick 的 now），所以传给它的回调必须引用
+   * 稳定。`create` / `update` / `trigger` 这些 mutation 对象每次渲染都是新引用，直接
+   * useCallback 会白搭 —— 用 ref 转发到最新的那个处理函数。
+   */
+  const editorRef = useRef<Editor>(null);
+  const submitRef = useRef(handleSubmit);
+  const triggerRef = useRef(handleTrigger);
+  // 渲染期不写 ref，提交后再同步，避免并发渲染下读到中间态
+  useEffect(() => {
+    editorRef.current = editor;
+    submitRef.current = handleSubmit;
+    triggerRef.current = handleTrigger;
+  });
+
+  const closeEditor = useCallback(() => setEditor(null), []);
+  const submitEditor = useCallback(
+    (input: Parameters<typeof handleSubmit>[0]) => submitRef.current(input),
+    [],
+  );
+  const isEditMode = editor?.mode === "edit";
+  const triggerEditor = useMemo(() => {
+    if (!isEditMode) return undefined;
+    return () => {
+      const current = editorRef.current;
+      if (current?.mode === "edit") triggerRef.current(current.job);
+    };
+  }, [isEditMode]);
 
   return (
     <>
@@ -466,11 +495,9 @@ export function JobsPage() {
         job={editor?.mode === "edit" ? editor.job : null}
         executors={executors}
         submitting={create.isPending || update.isPending}
-        onClose={() => setEditor(null)}
-        onSubmit={handleSubmit}
-        onTrigger={
-          editor?.mode === "edit" ? () => handleTrigger(editor.job) : undefined
-        }
+        onClose={closeEditor}
+        onSubmit={submitEditor}
+        onTrigger={triggerEditor}
       />
 
       <ConfirmDialog

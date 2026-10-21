@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { AlertCircle, Braces, CalendarClock, Play, Sparkles, Wand2 } from "lucide-react";
 import { Drawer } from "@/components/ui/Drawer";
 import { Button } from "@/components/ui/Button";
@@ -89,7 +89,7 @@ export interface JobFormDrawerProps {
   onTrigger?: () => void;
 }
 
-export function JobFormDrawer({
+function JobFormDrawerImpl({
   open,
   job,
   executors,
@@ -549,3 +549,9 @@ export function JobFormDrawer({
     </Drawer>
   );
 }
+
+/**
+ * 同上：列表页每秒 tick 一次「下次分派」的相对时间，memo 让表单抽屉不被牵连。
+ * 表单状态自己就是 `useState`，父级重渲染本来也不会丢，memo 只是省掉一次无谓 reconcile。
+ */
+export const JobFormDrawer = memo(JobFormDrawerImpl);

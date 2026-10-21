@@ -51,6 +51,8 @@
   html {
     -webkit-text-size-adjust: 100%;
     text-rendering: optimizeLegibility;
+    /* 弹层锁滚动时滚动条会消失，预留槽位避免整页横向抖动（Windows/Linux 生效） */
+    scrollbar-gutter: stable;
   }
 
   body {

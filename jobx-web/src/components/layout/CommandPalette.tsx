@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { getDataMode, setDataMode } from "@/lib/api";
 import { useAllJobs } from "@/hooks/use-jobs";
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { useToast } from "@/components/ui/Toast";
 
 interface Action {
@@ -105,6 +106,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     setCursor(0);
   }, [query]);
 
+  useBodyScrollLock(open);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
@@ -123,7 +126,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
   return createPortal(
     <div className="fixed inset-0 z-[70] flex items-start justify-center p-4 pt-[12vh]">
-      <div className="absolute inset-0 animate-fade bg-ink/25 backdrop-blur-[3px]" onClick={onClose} aria-hidden />
+      <div className="absolute inset-0 animate-fade bg-ink/25" onClick={onClose} aria-hidden />
       <div
         role="dialog"
         aria-modal="true"

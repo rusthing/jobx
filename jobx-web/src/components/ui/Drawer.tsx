@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { cn } from "@/lib/utils";
 import { IconButton } from "./Button";
 
@@ -26,29 +27,27 @@ export function Drawer({
   width = 580,
   badge,
 }: DrawerProps) {
+  useBodyScrollLock(open);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKey);
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = previous;
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
   if (!open) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div
-        className="absolute inset-0 animate-fade bg-ink/25 backdrop-blur-[2px]"
-        onClick={onClose}
-        aria-hidden
-      />
+      {/*
+        遮罩**不要**加 `backdrop-blur`：一层覆盖整个视口的 backdrop-filter 会让浏览器每帧
+        重新模糊遮罩下的整页（实测抽屉内滚动 55fps → 30fps，Retina 上按物理像素再翻 4 倍）。
+        纯半透明色同样能拉开层次，成本为零。
+      */}
+      <div className="absolute inset-0 animate-fade bg-ink/25" onClick={onClose} aria-hidden />
       <div
         role="dialog"
         aria-modal="true"
@@ -100,6 +99,8 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  useBodyScrollLock(open);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
@@ -113,7 +114,7 @@ export function ConfirmDialog({
 
   return createPortal(
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
-      <div className="absolute inset-0 animate-fade bg-ink/30 backdrop-blur-[2px]" onClick={onCancel} aria-hidden />
+      <div className="absolute inset-0 animate-fade bg-ink/30" onClick={onCancel} aria-hidden />
       <div
         role="alertdialog"
         aria-modal="true"
