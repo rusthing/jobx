@@ -15,6 +15,8 @@ pub struct JobxJobDto {
     pub job_type: JobType,
     /// 是否高频任务
     /// 这个由计划类型、cron表达式、固定时间间隔与配置中的高频任务时长阈值计算得出
+    /// 库默认 false，新增不传时由数据库补默认值
+    #[db_default]
     pub high_freq: Option<bool>,
     /// cron表达式
     /// 当 job_type 为 cron表达式时必填

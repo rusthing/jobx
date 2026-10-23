@@ -24,6 +24,8 @@ pub struct JobxTaskDto {
     /// 计划类型: 0=手动分派, 1=cron表达式, 2=固定延迟, 3=固定频率
     pub job_type: JobType,
     /// 是否高频任务
+    /// 库默认 false，新增不传时由数据库补默认值
+    #[db_default]
     pub high_freq: Option<bool>,
     /// cron表达式
     pub cron: Option<String>,
