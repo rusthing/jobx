@@ -135,7 +135,7 @@ create table jobx_task (
    updater_id           INT8                 not null,
    update_ms            INT8                 not null,
    constraint PK_JOBX_TASK primary key (id),
-   constraint AK_JOB_ID_AND_SCHEDULED_EXEC_STAR_JOBX_TASK unique (job_id, scheduled_exec_start_ms)
+   constraint AK_JOB_ID_AND_SCHEDULED_EXEC_START_MS_JOBX_TASK unique (job_id, scheduled_exec_start_ms)
 );
 
 comment on table jobx_task is
