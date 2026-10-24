@@ -16,10 +16,13 @@ pub struct JobxTaskDto {
     /// 预定开始执行时间戳
     pub scheduled_exec_start_ms: Option<u64>,
     /// 执行器编码
+    /// @len 1..=50
     pub executor_code: String,
     /// 执行器实例
+    /// @len 0..=100
     pub executor_instance: Option<String>,
     /// 执行参数
+    /// @len 0..=800
     pub exec_params: Option<String>,
     /// 计划类型: 0=手动分派, 1=cron表达式, 2=固定延迟, 3=固定频率
     pub job_type: JobType,
@@ -28,6 +31,7 @@ pub struct JobxTaskDto {
     #[db_default]
     pub high_freq: Option<bool>,
     /// cron表达式
+    /// @len 0..=30
     pub cron: Option<String>,
     /// 固定间隔时间
     pub interval_duration: Option<Duration>,
@@ -38,6 +42,7 @@ pub struct JobxTaskDto {
     /// 分派提前毫秒数
     pub assign_lead_ms: Option<u32>,
     /// 执行详情
+    /// @len 0..=800
     pub exec_detail: Option<String>,
     /// 开始执行时间戳
     pub exec_start_ms: Option<u64>,

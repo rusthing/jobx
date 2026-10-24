@@ -6,10 +6,13 @@ use robotech::macros::crud_dto;
 pub struct JobxJobDto {
     /// 执行器编码
     /// 发布任务消息时的key将以此编码结尾，只有相同编码的执行器才订阅此key
+    /// @len 1..=50
     pub executor_code: String,
     /// 名称
+    /// @len 1..=50
     pub name: String,
     /// 参数
+    /// @len 0..=800
     pub params: Option<String>,
     /// 计划类型: 0=手动分派, 1=cron表达式, 2=固定延迟, 3=固定频率
     pub job_type: JobType,
@@ -20,6 +23,7 @@ pub struct JobxJobDto {
     pub high_freq: Option<bool>,
     /// cron表达式
     /// 当 job_type 为 cron表达式时必填
+    /// @len 0..=30
     pub cron: Option<String>,
     /// 固定间隔时间
     /// 当job_type为固定延迟或固定频率时必填
@@ -37,6 +41,7 @@ pub struct JobxJobDto {
     /// 为空时采用调度器的全局默认值（jobx-scheduler.stream-max-len，默认 10000）
     pub stream_max_len: Option<u32>,
     /// 备注
+    /// @len 0..=50
     pub remark: Option<String>,
     /// 启用
     #[db_default]
