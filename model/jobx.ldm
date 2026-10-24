@@ -1655,6 +1655,8 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1788856962</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
+<a:Comment>名称
+@len 1..=50</a:Comment>
 <a:DataType>VA50</a:DataType>
 <a:Length>50</a:Length>
 <a:LogicalAttribute.Mandatory>1</a:LogicalAttribute.Mandatory>
@@ -1668,6 +1670,8 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1788859308</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
+<a:Comment>参数
+@len 0..=800</a:Comment>
 <a:DataType>VA800</a:DataType>
 <a:Length>800</a:Length>
 <a:GlobalObjectID/>
@@ -1681,10 +1685,7 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:ModificationDate>1789108602</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:Comment>计划类型
-0: 手动分派
-1: cron表达式
-2: 固定延迟
-3: 固定频率</a:Comment>
+@enum JobType default=Manual 0=Manual:手动分派, 1=Cron:cron 表达式, 2=FixedDelay:固定延迟, 3=FixedRate:固定频率</a:Comment>
 <a:DataType>BT</a:DataType>
 <a:LogicalAttribute.Mandatory>1</a:LogicalAttribute.Mandatory>
 <a:GlobalObjectID/>
@@ -1712,7 +1713,8 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:ModificationDate>1791793878</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:Comment>cron表达式
-当 job_type 为 cron表达式时必填</a:Comment>
+当 job_type 为 cron表达式时必填
+@len 0..=30</a:Comment>
 <a:DataType>VA30</a:DataType>
 <a:Length>30</a:Length>
 <a:GlobalObjectID/>
@@ -1762,7 +1764,8 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:ModificationDate>1789541706</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:Comment>执行器编码
-发布任务消息时的key将以此编码结尾，只有相同编码的执行器才订阅此key</a:Comment>
+发布任务消息时的key将以此编码结尾，只有相同编码的执行器才订阅此key
+@len 1..=50</a:Comment>
 <a:DataType>VA50</a:DataType>
 <a:Length>50</a:Length>
 <a:LogicalAttribute.Mandatory>1</a:LogicalAttribute.Mandatory>
@@ -1811,6 +1814,8 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1788854746</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
+<a:Comment>备注
+@len 0..=50</a:Comment>
 <a:DataType>VA50</a:DataType>
 <a:Length>50</a:Length>
 <a:GlobalObjectID/>
@@ -1941,8 +1946,7 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:ModificationDate>1789098518</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:Comment>任务类型
-1: 立即执行
-2: 计划执行</a:Comment>
+@enum TaskType default=Immediate 1=Immediate:立即执行, 2=Scheduled:计划执行</a:Comment>
 <a:DataType>BT</a:DataType>
 <a:LogicalAttribute.Mandatory>1</a:LogicalAttribute.Mandatory>
 <a:GlobalObjectID/>
@@ -1968,9 +1972,7 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:ModificationDate>1789097430</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:Comment>任务状态
-0: 运行中
-1: 成功
-2: 失败</a:Comment>
+@enum TaskStatus default=Running 0=Running:运行中, 1=Success:成功, 2=Failed:失败</a:Comment>
 <a:DefaultValue>0</a:DefaultValue>
 <a:DataType>BT</a:DataType>
 <a:LogicalAttribute.Mandatory>1</a:LogicalAttribute.Mandatory>
@@ -2007,6 +2009,8 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789099068</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
+<a:Comment>执行详情
+@len 0..=800</a:Comment>
 <a:DataType>VA800</a:DataType>
 <a:Length>800</a:Length>
 <a:GlobalObjectID/>
@@ -2041,6 +2045,8 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789620097</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
+<a:Comment>执行器编码
+@len 1..=50</a:Comment>
 <a:DataType>VA50</a:DataType>
 <a:Length>50</a:Length>
 <a:LogicalAttribute.Mandatory>1</a:LogicalAttribute.Mandatory>
@@ -2054,6 +2060,8 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789620097</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
+<a:Comment>执行器实例
+@len 0..=100</a:Comment>
 <a:DataType>VA100</a:DataType>
 <a:Length>100</a:Length>
 <a:GlobalObjectID/>
@@ -2066,6 +2074,8 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789620097</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
+<a:Comment>执行参数
+@len 0..=800</a:Comment>
 <a:DataType>VA800</a:DataType>
 <a:Length>800</a:Length>
 <a:GlobalObjectID/>
@@ -2079,10 +2089,7 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:ModificationDate>1789620097</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:Comment>计划类型
-0: 手动分派
-1: cron表达式
-2: 固定延迟
-3: 固定频率</a:Comment>
+@enum JobType default=Manual 0=Manual:手动分派, 1=Cron:cron 表达式, 2=FixedDelay:固定延迟, 3=FixedRate:固定频率</a:Comment>
 <a:DataType>BT</a:DataType>
 <a:LogicalAttribute.Mandatory>1</a:LogicalAttribute.Mandatory>
 <a:GlobalObjectID/>
@@ -2107,6 +2114,8 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789620097</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
+<a:Comment>cron表达式
+@len 0..=30</a:Comment>
 <a:DataType>VA30</a:DataType>
 <a:Length>30</a:Length>
 <a:GlobalObjectID/>

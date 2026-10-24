@@ -4624,6 +4624,8 @@ DAT 1788921306</a:History>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1788921306</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
+<a:Comment>名称
+@len 1..=50</a:Comment>
 <a:History>ORG {0F58EFB9-5590-47B3-9615-EA93156C9CF6}
 DAT 1788921306</a:History>
 <a:DataType>VARCHAR(50)</a:DataType>
@@ -4639,6 +4641,8 @@ DAT 1788921306</a:History>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1788921306</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
+<a:Comment>参数
+@len 0..=800</a:Comment>
 <a:History>ORG {3722B434-9939-4A49-A40A-303065782D54}
 DAT 1788921306</a:History>
 <a:DataType>VARCHAR(800)</a:DataType>
@@ -4654,10 +4658,7 @@ DAT 1788921306</a:History>
 <a:ModificationDate>1789108749</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:Comment>计划类型
-0: 手动分派
-1: cron表达式
-2: 固定延迟
-3: 固定频率</a:Comment>
+@enum JobType default=Manual 0=Manual:手动分派, 1=Cron:cron 表达式, 2=FixedDelay:固定延迟, 3=FixedRate:固定频率</a:Comment>
 <a:History>ORG {31FD8A98-B4D9-49BC-AAF0-981BD371F10D}
 DAT 1788921306</a:History>
 <a:DataType>INT2</a:DataType>
@@ -4690,7 +4691,8 @@ DAT 1789108744</a:History>
 <a:ModificationDate>1791801959</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:Comment>cron表达式
-当 job_type 为 cron表达式时必填</a:Comment>
+当 job_type 为 cron表达式时必填
+@len 0..=30</a:Comment>
 <a:History>ORG {D270E1BE-F7D9-4ACE-90E2-1C781B93883B}
 DAT 1788921306</a:History>
 <a:DataType>VARCHAR(30)</a:DataType>
@@ -4750,7 +4752,8 @@ DAT 1788921306</a:History>
 <a:ModificationDate>1789541926</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:Comment>执行器编码
-发布任务消息时的key将以此编码结尾，只有相同编码的执行器才订阅此key</a:Comment>
+发布任务消息时的key将以此编码结尾，只有相同编码的执行器才订阅此key
+@len 1..=50</a:Comment>
 <a:History>ORG {1495422F-2E05-4A51-95AF-8DB44090399D}
 DAT 1788921306</a:History>
 <a:DataType>VARCHAR(50)</a:DataType>
@@ -4810,6 +4813,8 @@ DAT 1791945739</a:History>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1788921306</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
+<a:Comment>备注
+@len 0..=50</a:Comment>
 <a:History>ORG {3F755224-ABFC-4049-B364-85A24617FBBF}
 DAT 1788921306</a:History>
 <a:DataType>VARCHAR(50)</a:DataType>
@@ -5028,8 +5033,7 @@ DAT 1788921306</a:History>
 <a:ModificationDate>1789108749</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:Comment>任务类型
-1: 立即执行
-2: 计划执行</a:Comment>
+@enum TaskType default=Immediate 1=Immediate:立即执行, 2=Scheduled:计划执行</a:Comment>
 <a:History>ORG {92FB99B1-14CB-45BE-99E7-1ABB5107881E}
 DAT 1789108744</a:History>
 <a:DataType>INT2</a:DataType>
@@ -5060,10 +5064,7 @@ DAT 1788921306</a:History>
 <a:ModificationDate>1788942109</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:Comment>任务状态
-0: 运行中
-1: 成功
-2: 失败
-</a:Comment>
+@enum TaskStatus default=Running 0=Running:运行中, 1=Success:成功, 2=Failed:失败</a:Comment>
 <a:History>ORG {334A181F-A7E5-450E-9DE1-07B49503E48A}
 DAT 1788921306</a:History>
 <a:DefaultValue>0</a:DefaultValue>
@@ -5108,6 +5109,8 @@ DAT 1788940743</a:History>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789108749</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
+<a:Comment>执行详情
+@len 0..=800</a:Comment>
 <a:History>ORG {31C01232-496B-4B68-9A2F-DC2C19B44366}
 DAT 1789108744</a:History>
 <a:DataType>VARCHAR(800)</a:DataType>
@@ -5150,6 +5153,8 @@ DAT 1788921306</a:History>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789620097</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
+<a:Comment>执行器编码
+@len 1..=50</a:Comment>
 <a:History>ORG {A1B2C3D4-E5F6-4789-A0B1-C2D3E4F5A6B7}
 DAT 1789620097</a:History>
 <a:DataType>VARCHAR(50)</a:DataType>
@@ -5165,6 +5170,8 @@ DAT 1789620097</a:History>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789620097</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
+<a:Comment>执行器实例
+@len 0..=100</a:Comment>
 <a:History>ORG {B2C3D4E5-F6A7-4890-B1C2-D3E4F5A6B7C8}
 DAT 1789620097</a:History>
 <a:DataType>VARCHAR(100)</a:DataType>
@@ -5179,6 +5186,8 @@ DAT 1789620097</a:History>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789620097</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
+<a:Comment>执行参数
+@len 0..=800</a:Comment>
 <a:History>ORG {C3D4E5F6-A7B8-4901-C2D3-E4F5A6B7C8D9}
 DAT 1789620097</a:History>
 <a:DataType>VARCHAR(800)</a:DataType>
@@ -5194,10 +5203,7 @@ DAT 1789620097</a:History>
 <a:ModificationDate>1789620097</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:Comment>计划类型
-0: 手动分派
-1: cron表达式
-2: 固定延迟
-3: 固定频率</a:Comment>
+@enum JobType default=Manual 0=Manual:手动分派, 1=Cron:cron 表达式, 2=FixedDelay:固定延迟, 3=FixedRate:固定频率</a:Comment>
 <a:History>ORG {D4E5F6A7-B8C9-4012-D3E4-F5A6B7C8D9E0}
 DAT 1789620097</a:History>
 <a:DataType>INT2</a:DataType>
@@ -5227,6 +5233,8 @@ DAT 1789620097</a:History>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1789620097</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
+<a:Comment>cron表达式
+@len 0..=30</a:Comment>
 <a:History>ORG {F6A7B8C9-D0E1-4234-F5A6-B7C8D9E0F1A2}
 DAT 1789620097</a:History>
 <a:DataType>VARCHAR(30)</a:DataType>

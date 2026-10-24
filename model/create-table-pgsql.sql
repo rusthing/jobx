@@ -38,17 +38,16 @@ comment on column jobx_job.id is
 'ID';
 
 comment on column jobx_job.name is
-'名称';
+'名称
+@len 1..=50';
 
 comment on column jobx_job.params is
-'参数';
+'参数
+@len 0..=800';
 
 comment on column jobx_job.job_type is
 '计划类型
-0: 手动分派
-1: cron表达式
-2: 固定延迟
-3: 固定频率';
+@enum JobType default=Manual 0=Manual:手动分派, 1=Cron:cron 表达式, 2=FixedDelay:固定延迟, 3=FixedRate:固定频率';
 
 comment on column jobx_job.high_freq is
 '是否高频任务
@@ -56,7 +55,8 @@ comment on column jobx_job.high_freq is
 
 comment on column jobx_job.cron is
 'cron表达式
-当 job_type 为 cron表达式时必填';
+当 job_type 为 cron表达式时必填
+@len 0..=30';
 
 comment on column jobx_job.interval_duration is
 '固定间隔时间
@@ -70,7 +70,8 @@ comment on column jobx_job.valid_end_ms is
 
 comment on column jobx_job.executor_code is
 '执行器编码
-发布任务消息时的key将以此编码结尾，只有相同编码的执行器才订阅此key';
+发布任务消息时的key将以此编码结尾，只有相同编码的执行器才订阅此key
+@len 1..=50';
 
 comment on column jobx_job.assign_lead_ms is
 '分派提前毫秒数';
@@ -83,7 +84,8 @@ comment on column jobx_job.stream_max_len is
 为空时采用配置文件中 jobx.scheduler.stream-max-len 的默认值';
 
 comment on column jobx_job.remark is
-'备注';
+'备注
+@len 0..=50';
 
 comment on column jobx_job.enabled is
 '启用';
@@ -146,18 +148,14 @@ comment on column jobx_task.id is
 
 comment on column jobx_task.task_type is
 '任务类型
-1: 立即执行
-2: 计划执行';
+@enum TaskType default=Immediate 1=Immediate:立即执行, 2=Scheduled:计划执行';
 
 comment on column jobx_task.job_id is
 '任务计划ID';
 
 comment on column jobx_task.status is
 '任务状态
-0: 运行中
-1: 成功
-2: 失败
-';
+@enum TaskStatus default=Running 0=Running:运行中, 1=Success:成功, 2=Failed:失败';
 
 comment on column jobx_task.assign_ms is
 '分派时间戳';
@@ -166,7 +164,8 @@ comment on column jobx_task.scheduled_exec_start_ms is
 '预定开始执行时间戳';
 
 comment on column jobx_task.exec_detail is
-'执行详情';
+'执行详情
+@len 0..=800';
 
 comment on column jobx_task.exec_start_ms is
 '开始执行时间戳';
@@ -175,26 +174,27 @@ comment on column jobx_task.exec_end_ms is
 '结束执行时间戳';
 
 comment on column jobx_task.executor_code is
-'执行器编码';
+'执行器编码
+@len 1..=50';
 
 comment on column jobx_task.executor_instance is
-'执行器实例';
+'执行器实例
+@len 0..=100';
 
 comment on column jobx_task.exec_params is
-'执行参数';
+'执行参数
+@len 0..=800';
 
 comment on column jobx_task.job_type is
 '计划类型
-0: 手动分派
-1: cron表达式
-2: 固定延迟
-3: 固定频率';
+@enum JobType default=Manual 0=Manual:手动分派, 1=Cron:cron 表达式, 2=FixedDelay:固定延迟, 3=FixedRate:固定频率';
 
 comment on column jobx_task.high_freq is
 '是否高频任务';
 
 comment on column jobx_task.cron is
-'cron表达式';
+'cron表达式
+@len 0..=30';
 
 comment on column jobx_task.interval_duration is
 '固定间隔时间';
