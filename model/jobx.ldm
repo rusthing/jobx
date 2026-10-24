@@ -1685,7 +1685,11 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:ModificationDate>1789108602</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:Comment>计划类型
-@enum JobType default=Manual 0=Manual:手动分派, 1=Cron:cron 表达式, 2=FixedDelay:固定延迟, 3=FixedRate:固定频率</a:Comment>
+@enum JobType default=Manual
+  0=Manual      手动分派
+  1=Cron        cron 表达式
+  2=FixedDelay  固定延迟
+  3=FixedRate   固定频率</a:Comment>
 <a:DataType>BT</a:DataType>
 <a:LogicalAttribute.Mandatory>1</a:LogicalAttribute.Mandatory>
 <a:GlobalObjectID/>
@@ -1946,7 +1950,9 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:ModificationDate>1789098518</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:Comment>任务类型
-@enum TaskType default=Immediate 1=Immediate:立即执行, 2=Scheduled:计划执行</a:Comment>
+@enum TaskType default=Immediate
+  1=Immediate  立即执行
+  2=Scheduled  计划执行</a:Comment>
 <a:DataType>BT</a:DataType>
 <a:LogicalAttribute.Mandatory>1</a:LogicalAttribute.Mandatory>
 <a:GlobalObjectID/>
@@ -1972,7 +1978,10 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:ModificationDate>1789097430</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:Comment>任务状态
-@enum TaskStatus default=Running 0=Running:运行中, 1=Success:成功, 2=Failed:失败</a:Comment>
+@enum TaskStatus default=Running
+  0=Running  运行中
+  1=Success  成功
+  2=Failed   失败</a:Comment>
 <a:DefaultValue>0</a:DefaultValue>
 <a:DataType>BT</a:DataType>
 <a:LogicalAttribute.Mandatory>1</a:LogicalAttribute.Mandatory>
@@ -2089,7 +2098,11 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:ModificationDate>1789620097</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:Comment>计划类型
-@enum JobType default=Manual 0=Manual:手动分派, 1=Cron:cron 表达式, 2=FixedDelay:固定延迟, 3=FixedRate:固定频率</a:Comment>
+@enum JobType default=Manual
+  0=Manual      手动分派
+  1=Cron        cron 表达式
+  2=FixedDelay  固定延迟
+  3=FixedRate   固定频率</a:Comment>
 <a:DataType>BT</a:DataType>
 <a:LogicalAttribute.Mandatory>1</a:LogicalAttribute.Mandatory>
 <a:GlobalObjectID/>

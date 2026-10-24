@@ -4658,7 +4658,11 @@ DAT 1788921306</a:History>
 <a:ModificationDate>1789108749</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:Comment>计划类型
-@enum JobType default=Manual 0=Manual:手动分派, 1=Cron:cron 表达式, 2=FixedDelay:固定延迟, 3=FixedRate:固定频率</a:Comment>
+@enum JobType default=Manual
+  0=Manual      手动分派
+  1=Cron        cron 表达式
+  2=FixedDelay  固定延迟
+  3=FixedRate   固定频率</a:Comment>
 <a:History>ORG {31FD8A98-B4D9-49BC-AAF0-981BD371F10D}
 DAT 1788921306</a:History>
 <a:DataType>INT2</a:DataType>
@@ -5033,7 +5037,9 @@ DAT 1788921306</a:History>
 <a:ModificationDate>1789108749</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:Comment>任务类型
-@enum TaskType default=Immediate 1=Immediate:立即执行, 2=Scheduled:计划执行</a:Comment>
+@enum TaskType default=Immediate
+  1=Immediate  立即执行
+  2=Scheduled  计划执行</a:Comment>
 <a:History>ORG {92FB99B1-14CB-45BE-99E7-1ABB5107881E}
 DAT 1789108744</a:History>
 <a:DataType>INT2</a:DataType>
@@ -5064,7 +5070,10 @@ DAT 1788921306</a:History>
 <a:ModificationDate>1788942109</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:Comment>任务状态
-@enum TaskStatus default=Running 0=Running:运行中, 1=Success:成功, 2=Failed:失败</a:Comment>
+@enum TaskStatus default=Running
+  0=Running  运行中
+  1=Success  成功
+  2=Failed   失败</a:Comment>
 <a:History>ORG {334A181F-A7E5-450E-9DE1-07B49503E48A}
 DAT 1788921306</a:History>
 <a:DefaultValue>0</a:DefaultValue>
@@ -5203,7 +5212,11 @@ DAT 1789620097</a:History>
 <a:ModificationDate>1789620097</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:Comment>计划类型
-@enum JobType default=Manual 0=Manual:手动分派, 1=Cron:cron 表达式, 2=FixedDelay:固定延迟, 3=FixedRate:固定频率</a:Comment>
+@enum JobType default=Manual
+  0=Manual      手动分派
+  1=Cron        cron 表达式
+  2=FixedDelay  固定延迟
+  3=FixedRate   固定频率</a:Comment>
 <a:History>ORG {D4E5F6A7-B8C9-4012-D3E4-F5A6B7C8D9E0}
 DAT 1789620097</a:History>
 <a:DataType>INT2</a:DataType>

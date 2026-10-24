@@ -47,7 +47,11 @@ comment on column jobx_job.params is
 
 comment on column jobx_job.job_type is
 '计划类型
-@enum JobType default=Manual 0=Manual:手动分派, 1=Cron:cron 表达式, 2=FixedDelay:固定延迟, 3=FixedRate:固定频率';
+@enum JobType default=Manual
+  0=Manual      手动分派
+  1=Cron        cron 表达式
+  2=FixedDelay  固定延迟
+  3=FixedRate   固定频率';
 
 comment on column jobx_job.high_freq is
 '是否高频任务
@@ -148,14 +152,19 @@ comment on column jobx_task.id is
 
 comment on column jobx_task.task_type is
 '任务类型
-@enum TaskType default=Immediate 1=Immediate:立即执行, 2=Scheduled:计划执行';
+@enum TaskType default=Immediate
+  1=Immediate  立即执行
+  2=Scheduled  计划执行';
 
 comment on column jobx_task.job_id is
 '任务计划ID';
 
 comment on column jobx_task.status is
 '任务状态
-@enum TaskStatus default=Running 0=Running:运行中, 1=Success:成功, 2=Failed:失败';
+@enum TaskStatus default=Running
+  0=Running  运行中
+  1=Success  成功
+  2=Failed   失败';
 
 comment on column jobx_task.assign_ms is
 '分派时间戳';
@@ -187,7 +196,11 @@ comment on column jobx_task.exec_params is
 
 comment on column jobx_task.job_type is
 '计划类型
-@enum JobType default=Manual 0=Manual:手动分派, 1=Cron:cron 表达式, 2=FixedDelay:固定延迟, 3=FixedRate:固定频率';
+@enum JobType default=Manual
+  0=Manual      手动分派
+  1=Cron        cron 表达式
+  2=FixedDelay  固定延迟
+  3=FixedRate   固定频率';
 
 comment on column jobx_task.high_freq is
 '是否高频任务';
