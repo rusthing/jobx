@@ -212,7 +212,10 @@ impl JobxJobSvc {
     ///
     /// * `Ok(JobxJobAddDto)` — 已完成调度字段计算的 DTO，将交还给 `#[svc]` 宏继续执行后续流程。
     /// * `Err` — 参数不完整或调度计算失败。
-    async fn before_add(mut add_dto: JobxJobAddDto) -> Result<JobxJobAddDto, SvcError> {
+    async fn before_add<C: ConnectionTrait>(
+        mut add_dto: JobxJobAddDto,
+        _db: &C,
+    ) -> Result<JobxJobAddDto, SvcError> {
         let job_type = add_dto
             .job_type
             .ok_or_else(|| validator::ValidationError::new("job_type不能为空"))?;
@@ -270,7 +273,10 @@ impl JobxJobSvc {
     ///
     /// * `Ok(JobxJobModifyDto)` — 已完成调度字段计算的 DTO，将交还给 `#[svc]` 宏继续执行后续流程。
     /// * `Err` — 参数不完整、原记录不存在或调度计算失败。
-    async fn before_modify(mut modify_dto: JobxJobModifyDto) -> Result<JobxJobModifyDto, SvcError> {
+    async fn before_modify<C: ConnectionTrait>(
+        mut modify_dto: JobxJobModifyDto,
+        _db: &C,
+    ) -> Result<JobxJobModifyDto, SvcError> {
         let modify_dto_clone = modify_dto.clone();
         let id = modify_dto_clone
             .id
