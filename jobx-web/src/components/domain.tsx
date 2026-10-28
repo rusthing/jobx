@@ -10,7 +10,7 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { describeCron } from "@/lib/cron";
-import { formatDuration } from "@/lib/time";
+import { formatDuration, toMs } from "@/lib/time";
 import { Badge } from "@/components/ui/Badge";
 
 export function JobTypeBadge({ type, short }: { type: JobType; short?: boolean }) {
@@ -23,7 +23,10 @@ export function JobTypeBadge({ type, short }: { type: JobType; short?: boolean }
 }
 
 export function StatusBadge({ task, compact }: { task: Task; compact?: boolean }) {
-  if (task.status === TASK_STATUS.running && task.execStartMs === null) {
+  // 判断「还没开始执行」用 toMs 而不是 `=== null`：
+  // 接口对 Option 字段可能整体省略（拿到的是 undefined），严格等于 null 会漏判，
+  // 徽标显示「运行中」而耗时列显示「待执行」，同一行自相矛盾。
+  if (task.status === TASK_STATUS.running && toMs(task.execStartMs) === null) {
     return (
       <Badge tone="warn" dot pulse={!compact}>
         待执行

@@ -34,6 +34,11 @@ pub struct JobxTaskVo {
     pub valid_begin_ms: Option<u64>,
     /// 有效结束时间戳
     pub valid_end_ms: Option<u64>,
+    /// 执行截止时间戳
+    ///
+    /// 高频任务本次分派的执行时段终点。执行器的高频循环跑到这个时刻就收尾上报，
+    /// 不再依赖 `valid_end_ms`（那是整个计划的有效期，为空时循环永不结束）。
+    pub exec_deadline_ms: Option<u64>,
     /// 分派提前毫秒数
     pub assign_lead_ms: Option<u32>,
     /// 执行详情

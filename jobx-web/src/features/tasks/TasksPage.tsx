@@ -21,6 +21,7 @@ import {
   type TaskType,
 } from "@/lib/api";
 import { formatCompact, formatDuration, formatRelative, toMs } from "@/lib/time";
+import { isStaleTask } from "@/lib/metrics";
 import { cn } from "@/lib/utils";
 import { TaskDetailDrawer } from "./TaskDetailDrawer";
 
@@ -256,6 +257,7 @@ export function TasksPage() {
                   const end = toMs(task.execEndMs);
                   const duration = start !== null && end !== null ? end - start : null;
                   const queued = task.status === TASK_STATUS.running && start === null;
+                  const stale = isStaleTask(task, now);
 
                   return (
                     <tr
@@ -311,13 +313,24 @@ export function TasksPage() {
                         <span
                           className={cn(
                             "tnum font-mono text-[11.5px]",
-                            duration === null ? "text-muted" : "text-ink",
+                            duration !== null
+                              ? "text-ink"
+                              : stale
+                                ? "text-danger"
+                                : "text-muted",
                           )}
+                          title={
+                            stale
+                              ? "状态长时间没有推进，执行器可能已失联（服务端巡检会按阈值回收）"
+                              : undefined
+                          }
                         >
                           {duration !== null
                             ? formatDuration(duration)
                             : queued
-                              ? "待执行"
+                              ? stale
+                                ? "待执行 · 已超时"
+                                : "待执行"
                               : start !== null
                                 ? formatDuration(now - start)
                                 : "—"}

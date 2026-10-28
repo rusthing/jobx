@@ -39,6 +39,11 @@ pub struct JobxTaskDto {
     pub valid_begin_ms: Option<u64>,
     /// 有效结束时间戳
     pub valid_end_ms: Option<u64>,
+    /// 执行截止时间戳
+    /// 高频任务本次分派的执行时段终点，由服务端在 take 时算出：
+    /// `min(valid_end_ms, scheduled_exec_start_ms + high_freq_assign_interval)`。
+    /// 为空表示不限（非高频任务、或历史数据）。
+    pub exec_deadline_ms: Option<u64>,
     /// 分派提前毫秒数
     pub assign_lead_ms: Option<u32>,
     /// 执行详情

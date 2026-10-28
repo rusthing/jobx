@@ -2167,6 +2167,19 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:DataType>LI</a:DataType>
 <a:GlobalObjectID/>
 </o:EntityAttribute>
+<o:EntityAttribute Id="o61">
+<a:ObjectID>E1F2A3B4-C5D6-4789-E0F1-A2B3C4D5E6F7</a:ObjectID>
+<a:Name>执行截止时间戳</a:Name>
+<a:Code>exec_deadline_ms</a:Code>
+<a:CreationDate>1793175000</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1793175000</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:Comment>执行截止时间戳
+高频任务本次分派的执行时段终点（min(计划有效结束时间, 预定开始执行时间 + 高频分派间隔)）；为空表示不限，仅对高频任务有意义</a:Comment>
+<a:DataType>LI</a:DataType>
+<a:GlobalObjectID/>
+</o:EntityAttribute>
 <o:EntityAttribute Id="o53">
 <a:ObjectID>D0E1F2A3-B4C5-4678-D9E0-F1A2B3C4D5E6</a:ObjectID>
 <a:Name>分派提前毫秒数</a:Name>

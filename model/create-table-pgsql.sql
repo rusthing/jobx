@@ -135,6 +135,7 @@ create table jobx_task (
    interval_duration    VARCHAR(10)          null,
    valid_begin_ms       INT8                 null,
    valid_end_ms         INT8                 null,
+   exec_deadline_ms     INT8                 null,
    assign_lead_ms       INT4                 null,
    creater_id           INT8                 not null,
    create_ms            INT8                 not null,
@@ -217,6 +218,10 @@ comment on column jobx_task.valid_begin_ms is
 
 comment on column jobx_task.valid_end_ms is
 '有效结束时间戳';
+
+comment on column jobx_task.exec_deadline_ms is
+'执行截止时间戳
+高频任务本次分派的执行时段终点（min(计划有效结束时间, 预定开始执行时间 + 高频分派间隔)）；为空表示不限，仅对高频任务有意义';
 
 comment on column jobx_task.assign_lead_ms is
 '分派提前毫秒数';

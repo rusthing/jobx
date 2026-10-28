@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use config::Value;
 use jobx_svr::config::AppConfig;
-use jobx_svr::utils::setup_jobx_scheduler;
+use jobx_svr::utils::{setup_jobx_scheduler, setup_jobx_task_reaper};
 use robotech::app::setup_id_worker;
 use robotech::db::setup_db_conn;
 use robotech::macros::{bootstrap, db_migrate, log_call};
@@ -28,6 +28,7 @@ async fn setup(
     setup_db_conn(app_config.db.clone(), changed).await?;
 
     setup_jobx_scheduler(app_config.jobx_scheduler.clone(), changed);
+    setup_jobx_task_reaper(app_config.jobx_task_reaper.clone(), changed);
     setup_web_server(app_config.web.clone(), port, old_pid, changed).await?;
 
     Ok(())

@@ -116,6 +116,26 @@ pub struct JobxExecutorConfig {
     #[serde(with = "duration_serde", default = "consumer_stale_duration_default")]
     #[builder(default = consumer_stale_duration_default())]
     pub consumer_stale_duration: Duration,
+    /// 停机时等待「正在执行的任务」收尾的最长时间
+    ///
+    /// 进程收到 SIGTERM / SIGINT 后，执行器不再拉取新消息，并对在途任务做两件事：
+    ///
+    /// 1. **还在等预定执行时刻的**（`take` 已落库、`exec_start_ms` 尚未写入）：
+    ///    直接上报 `Failed`（「执行器重启，任务未执行」）。这类任务一次都还没跑，
+    ///    留着只会变成永远停在「运行中」的孤儿记录。
+    /// 2. **已经在跑的**：最多再等这么久。跑完就正常上报结果；超时则上报
+    ///    `Failed`（「执行器停机，执行被中断」），避免记录被进程退出带走。
+    ///
+    /// ## 取值
+    ///
+    /// 默认 5s。**必须小于进程被强杀的时间窗**（k8s 默认
+    /// `terminationGracePeriodSeconds = 30s`），也必须小于 robotech 停机钩子的
+    /// 单钩子上限（10s）—— 钩子在这段时间里等「在途任务数归零」，如果本值更大，
+    /// 钩子会先超时返回、进程随即退出，等待就没有意义了。
+    /// 超过本值仍未跑完的任务按「执行被中断」上报失败，剩下的交给服务端超时巡检。
+    #[serde(with = "duration_serde", default = "shutdown_grace_default")]
+    #[builder(default = shutdown_grace_default())]
+    pub shutdown_grace: Duration,
 }
 
 fn executor_key_default() -> String {
@@ -148,4 +168,8 @@ fn maintenance_interval_default() -> Duration {
 
 fn consumer_stale_duration_default() -> Duration {
     Duration::from_secs(60)
+}
+
+fn shutdown_grace_default() -> Duration {
+    Duration::from_secs(5)
 }

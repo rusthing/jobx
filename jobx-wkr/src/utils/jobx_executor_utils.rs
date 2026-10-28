@@ -16,14 +16,130 @@ use robotech::redis::{
     list_group_consumers, read_from_stream,
 };
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
+use tokio::sync::watch;
 use tokio::time::Instant;
 use tracing::{info, trace, warn};
 use wheel_rs::time_utils::{build_ticker, now_ms};
 
 static JOBX_EXECUTOR_CONFIGS: ArcSwapOption<HashMap<String, Arc<JobxExecutorConfig>>> =
     ArcSwapOption::const_empty();
+
+// ============================ 停机收尾 ============================
+//
+// 执行器领取任务后会先在 `jobx_task` 落一条「运行中」的记录（`status` 列默认 0），
+// 然后才等预定执行时刻、执行、上报结果。进程若在这个窗口里被 SIGTERM / SIGKILL 带走，
+// 记录就永远停在「运行中」：消息在 `take` 成功那一刻已经 ACK，`XAUTOCLAIM` 救不到它，
+// 只能等服务端的超时巡检兜底。
+//
+// 所以这里做两件事：
+// 1. 用一个进程级 `watch` 通道把「要停机了」广播给所有执行器循环和在途任务；
+// 2. 通过 robotech 的停机钩子（`shutdown_app` 时执行）让在途任务收尾，
+//    并等待在途任务数归零，最多等 `shutdown_grace`。
+
+/// 停机时「一次都没跑」的任务的失败原因。
+const SHUTDOWN_NOT_EXECUTED_DETAIL: &str = "执行器重启，任务未执行";
+
+/// 停机时「跑到一半被打断」的任务的失败原因。
+const SHUTDOWN_INTERRUPTED_DETAIL: &str = "执行器停机，执行被中断";
+
+/// 取不到执行器配置时使用的停机宽限（与 `JobxExecutorConfig::shutdown_grace` 默认值一致）
+///
+/// 必须小于 robotech 停机钩子的单钩子上限（10s）：钩子在这段时间里等「在途任务归零」，
+/// 本值更大就会先超时返回、进程随即退出。
+const DEFAULT_SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
+
+/// 停机信号发送端（进程级，只初始化一次）
+static SHUTDOWN_TX: OnceLock<watch::Sender<bool>> = OnceLock::new();
+
+/// 在途任务计数（`handle_stream_message` 进出一增一减）
+static IN_FLIGHT_TASKS: AtomicUsize = AtomicUsize::new(0);
+
+fn shutdown_sender() -> &'static watch::Sender<bool> {
+    SHUTDOWN_TX.get_or_init(|| watch::channel(false).0)
+}
+
+/// 订阅停机信号。
+///
+/// 每个订阅者持有自己的 `Receiver`：`watch` 会为每个订阅者记录已读版本，
+/// 因此多个执行器循环、多个在途任务互不影响，也不会漏掉「订阅前就已发出」的信号
+/// （先 `borrow()` 判断当前值即可）。
+fn shutdown_receiver() -> watch::Receiver<bool> {
+    shutdown_sender().subscribe()
+}
+
+/// 进程是否已进入停机流程
+pub fn is_shutting_down() -> bool {
+    SHUTDOWN_TX
+        .get()
+        .map(|tx| *tx.borrow())
+        .unwrap_or(false)
+}
+
+/// 主动触发停机流程。
+///
+/// 一般不需要手动调用：`bootstrap!` 启动的应用由 robotech 的停机钩子自动触发。
+/// 供不使用 `bootstrap!` 的宿主程序（或测试）自行控制。
+pub fn trigger_shutdown() {
+    if let Some(tx) = SHUTDOWN_TX.get() {
+        let _ = tx.send(true);
+    }
+}
+
+fn in_flight_tasks() -> usize {
+    IN_FLIGHT_TASKS.load(Ordering::SeqCst)
+}
+
+/// 在途任务计数守卫：构造时 +1，drop 时 -1。
+///
+/// 用 RAII 而不是在每个 `return` 分支手动减一 —— `handle_stream_message` 里
+/// 有六七个提前返回点（解析失败、取客户端失败、take 失败、停机放弃…），
+/// 漏一个计数就永远回不到 0，停机钩子会白等到超时。
+struct InFlightTask;
+
+impl InFlightTask {
+    fn enter() -> Self {
+        IN_FLIGHT_TASKS.fetch_add(1, Ordering::SeqCst);
+        Self
+    }
+}
+
+impl Drop for InFlightTask {
+    fn drop(&mut self) {
+        IN_FLIGHT_TASKS.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+/// 注册停机钩子（进程内只注册一次）
+///
+/// 只在首次调用 `init_jobx_executor` 时注册：同一进程可能有多个执行器，
+/// 但它们共用同一个停机信号与同一个在途计数，一个钩子足够。
+fn ensure_shutdown_hook(grace: Duration) {
+    static HOOK_REGISTERED: OnceLock<()> = OnceLock::new();
+    if HOOK_REGISTERED.set(()).is_err() {
+        return;
+    }
+    info!("注册 jobx 执行器停机钩子（等待在途任务最多 {grace:?}）");
+    robotech::app::register_shutdown_hook(move || async move {
+        let pending = in_flight_tasks();
+        info!("收到停机信号，通知执行器停止拉取任务（在途 {pending} 个）");
+        let _ = shutdown_sender().send(true);
+        // 等在途任务把「失败」写回服务端。轮询而非 notify：任务收尾路径上
+        // 可能 panic / 被取消，计数靠 RAII 减，轮询能同时覆盖这两种情况。
+        let deadline = Instant::now() + grace;
+        while in_flight_tasks() > 0 && Instant::now() < deadline {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        let left = in_flight_tasks();
+        if left > 0 {
+            warn!("停机等待 {grace:?} 结束，仍有 {left} 个任务未收尾，交由服务端超时巡检回收");
+        } else {
+            info!("在途任务已全部收尾");
+        }
+    });
+}
 
 /// 消费者组的起始消费位点（建组那一刻生效）。
 ///
@@ -139,6 +255,9 @@ pub async fn init_jobx_executor(
 ) -> Result<(), CfgError> {
     info!("setup jobx executor config...: {executor_config:?}");
     set_jobx_executor_config(executor_config.clone());
+    // 停机收尾：进程退出前把在途任务关闭，别留成永远「运行中」的孤儿记录。
+    // 必须在 spawn 执行器循环之前注册，否则刚启动就可能漏掉一次停机信号。
+    ensure_shutdown_hook(executor_config.shutdown_grace);
     let app_instance_id = get_app_instance_id();
     if let Some(executor_group) = &executor_config.executor_group {
         let stream_key = build_stream_key(
@@ -174,7 +293,8 @@ pub async fn init_jobx_executor(
 /// 循环检测到该错误会就地调用 `ensure_consumer_group` 幂等重建，无需重启进程。
 ///
 /// 运行期间会动态读取最新配置，若扫描间隔变更则自动调整 ticker。
-/// 该函数不会返回，需通过 `tokio::spawn` 在独立任务中运行。
+/// 该函数在收到停机信号前不会返回，需通过 `tokio::spawn` 在独立任务中运行；
+/// 停机信号到达后立即停止拉取新消息并返回（在途任务由停机钩子收尾）。
 ///
 /// 除拉新消息外，还按 `maintenance_interval` 低频执行消费者组维护
 /// （见 [`run_group_maintenance`]）。
@@ -186,8 +306,23 @@ async fn run_executor_loop(
 ) {
     let mut ticker = build_ticker(initial_scan_interval);
     let mut last_maintenance = Instant::now();
+    let mut shutdown = shutdown_receiver();
     loop {
-        ticker.tick().await;
+        // 停机后不再拉新消息：在途任务要么跑完，要么由停机钩子关闭。
+        // 继续拉只会制造「领取了却没人执行」的新孤儿。
+        if *shutdown.borrow() {
+            info!("执行器 {executor_code} 已停机，停止拉取任务");
+            break;
+        }
+        // ticker 与停机信号竞争：不能只靠 `ticker.tick()`，否则停机后最多还要
+        // 空转一个 scan_interval 才退出。
+        tokio::select! {
+            _ = ticker.tick() => {}
+            _ = shutdown.changed() => {
+                info!("执行器 {executor_code} 收到停机信号，停止拉取新消息");
+                break;
+            }
+        }
         let executor_config = match get_jobx_executor_config(&executor_code) {
             Ok(c) => c,
             Err(e) => {
@@ -485,6 +620,18 @@ async fn dispatch_stream_messages(
 ///
 /// 配置 `noack = true` 时消息从未进入 PEL，所有 `XACK` 都是多余的（虽然无害），
 /// 因此整条路径上的 ACK 一律跳过。
+///
+/// ## 停机收尾
+///
+/// `take` 成功即落了一条「运行中」的 `jobx_task`，此后 ACK 已经发生，消息不会再投递。
+/// 因此这条记录只能由本函数负责关闭。进程收到停机信号时：
+/// - **还在等预定执行时刻**：立即上报 `Failed`（[`SHUTDOWN_NOT_EXECUTED_DETAIL`]），
+///   它一次都没跑，等下去没有意义；
+/// - **已经在跑**：最多再等 `shutdown_grace`，跑完正常上报，超时则上报
+///   `Failed`（[`SHUTDOWN_INTERRUPTED_DETAIL`]）；
+/// - **高频循环**：下一轮不再开始，已完成的轮次照常汇总上报。
+///
+/// 整个过程用 [`InFlightTask`] 计数，供停机钩子判断「是否可以退出了」。
 async fn handle_stream_message(
     stream_name: String,
     stream_id: StreamId,
@@ -494,6 +641,9 @@ async fn handle_stream_message(
     handler: Arc<dyn JobxTaskHandler>,
 ) {
     info!("收到任务: stream={}, id={}", stream_name, stream_id.id);
+    // 在途计数：整个处理过程（含等待预定执行时刻）都算在途，
+    // 停机钩子据此判断「还有没有任务没写完数据库」。
+    let _in_flight = InFlightTask::enter();
 
     let job = match extract_job_from_message(&stream_id.map) {
         Ok(job) => job,
@@ -579,23 +729,58 @@ async fn handle_stream_message(
 
     let task_id = task.id;
 
-    // 如果设定了预定执行时间，延迟到该时间再执行
+    // 上报参数与停机宽限先取出来：停机时要在「还没开始执行」的分支里直接上报失败，
+    // 不能等到执行阶段才读配置。
+    let executor_config = get_jobx_executor_config(&task.executor_code).ok();
+    let (retry_count, retry_interval) = executor_config
+        .as_ref()
+        .map(|c| (c.report_retry_count, c.report_retry_interval))
+        .unwrap_or((3, Duration::from_secs(1)));
+    let shutdown_grace = executor_config
+        .as_ref()
+        .map(|c| c.shutdown_grace)
+        .unwrap_or(DEFAULT_SHUTDOWN_GRACE);
+
+    // 如果设定了预定执行时间，延迟到该时间再执行。
+    //
+    // 这段等待（最长 = 调度器发布提前量 + `assign_lead_ms`）就是「已分派、未开始」
+    // 状态的暴露窗口：进程在这里被重启，记录会永远停在「运行中」。所以等待必须能被
+    // 停机信号打断，并且打断后要主动把任务关闭 —— 它一次都没跑，不存在「等它跑完」。
     if let Some(scheduled_ms) = task.scheduled_exec_start_ms {
         let scheduled_ms = U64::from(scheduled_ms).value();
         let now = now_ms();
         if scheduled_ms > now {
             info!("任务 {} 延迟到预定时间 {}ms 再执行", task_id, scheduled_ms);
             let deadline = Instant::now() + Duration::from_millis(scheduled_ms - now);
-            tokio::time::sleep_until(deadline).await;
+            let mut shutdown = shutdown_receiver();
+            let stopped = if *shutdown.borrow() {
+                true
+            } else {
+                tokio::select! {
+                    _ = tokio::time::sleep_until(deadline) => false,
+                    _ = shutdown.changed() => true,
+                }
+            };
+            if stopped {
+                warn!(
+                    "任务 {task_id} 等待执行期间收到停机信号，上报失败后退出（尚未开始执行）"
+                );
+                report_task_result(
+                    &api_client,
+                    U64::from(task_id),
+                    TaskStatus::Failed,
+                    SHUTDOWN_NOT_EXECUTED_DETAIL.to_string(),
+                    user_id,
+                    retry_count,
+                    retry_interval,
+                )
+                .await;
+                return;
+            }
         }
     }
 
     // ---- 执行任务 ----
-    let retry_config = get_jobx_executor_config(&task.executor_code).ok();
-    let (retry_count, retry_interval) = retry_config
-        .as_ref()
-        .map(|c| (c.report_retry_count, c.report_retry_interval))
-        .unwrap_or((3, Duration::from_secs(1)));
 
     // 标记开始执行
     let exec_start_ms = now_ms();
@@ -617,7 +802,17 @@ async fn handle_stream_message(
             .as_ref()
             .map(|d| d.as_millis() as u64)
             .unwrap_or(1000);
-        let end_ms = task.valid_end_ms.map_or(u64::MAX, |v| u64::from(v));
+        // 本段执行的终点由服务端下发：`exec_deadline_ms` =
+        // min(计划有效结束时间, 预定开始执行时刻 + high_freq_assign_interval)。
+        //
+        // 一次分派只代表**一段**连续执行，终点必须来自「分派间隔」而不是计划有效期。
+        // 退回到 `valid_end_ms` 只是给升级前创建的老记录兜底；两者都为空时仍会跑到
+        // `u64::MAX`，由服务端巡检的 `high-freq-exec-timeout` 兜底。
+        let end_ms = task
+            .exec_deadline_ms
+            .as_ref()
+            .or(task.valid_end_ms.as_ref())
+            .map_or(u64::MAX, |v| v.value());
         let is_fixed_rate = task.job_type == JobType::FixedRate;
 
         let strategy_desc = if is_fixed_rate {
@@ -644,6 +839,12 @@ async fn handle_stream_message(
         loop {
             let loop_start = now_ms();
             if loop_start >= end_ms {
+                break;
+            }
+            // 停机时不再开始新一轮：高频循环每轮都可能很慢，继续跑只会拖长退出时间。
+            // 已经跑完的轮次照常计入统计，下面的统一上报会把结果写回去。
+            if is_shutting_down() {
+                info!("高频任务 {} 收到停机信号，结束循环", task_id);
                 break;
             }
 
@@ -693,7 +894,18 @@ async fn handle_stream_message(
             };
 
             if sleep_ms > 0 {
-                tokio::time::sleep(Duration::from_millis(sleep_ms)).await;
+                let mut shutdown = shutdown_receiver();
+                if *shutdown.borrow() {
+                    info!("高频任务 {} 收到停机信号，结束循环", task_id);
+                    break;
+                }
+                tokio::select! {
+                    _ = tokio::time::sleep(Duration::from_millis(sleep_ms)) => {}
+                    _ = shutdown.changed() => {
+                        info!("高频任务 {} 等待间隔期间收到停机信号，结束循环", task_id);
+                        break;
+                    }
+                }
             }
         }
 
@@ -731,16 +943,37 @@ async fn handle_stream_message(
         let status = last_status;
         (status, exec_detail)
     } else {
-        let join_result = tokio::spawn(async move { handler.handle(&task).await }).await;
+        // 停机宽限：已经在跑的任务不硬砍（可能正在写库/投递），给它 `shutdown_grace`
+        // 跑完并正常上报；超时才按「执行被中断」上报失败，避免记录随进程一起消失。
+        let mut join = tokio::spawn(async move { handler.handle(&task).await });
+        let mut shutdown = shutdown_receiver();
+        let join_result = if *shutdown.borrow() {
+            Some(join.await)
+        } else {
+            tokio::select! {
+                result = &mut join => Some(result),
+                _ = shutdown.changed() => {
+                    warn!("任务 {task_id} 执行中收到停机信号，最多再等 {shutdown_grace:?}");
+                    match tokio::time::timeout(shutdown_grace, &mut join).await {
+                        Ok(result) => Some(result),
+                        Err(_) => None,
+                    }
+                }
+            }
+        };
         match join_result {
-            Ok(Ok(exec_detail)) => (TaskStatus::Success, exec_detail),
-            Ok(Err(e)) => {
+            Some(Ok(Ok(exec_detail))) => (TaskStatus::Success, exec_detail),
+            Some(Ok(Err(e))) => {
                 warn!("任务 {} 执行失败: {e:#}", task_id);
                 (TaskStatus::Failed, format!("{e:#}"))
             }
-            Err(e) => {
+            Some(Err(e)) => {
                 warn!("任务 {} 执行panic: {:?}", task_id, e);
                 (TaskStatus::Failed, format!("panic: {e}"))
+            }
+            None => {
+                warn!("任务 {task_id} 停机等待超时，执行被中断");
+                (TaskStatus::Failed, SHUTDOWN_INTERRUPTED_DETAIL.to_string())
             }
         }
     };

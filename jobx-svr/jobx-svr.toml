@@ -9,6 +9,20 @@ profile = "dev"
 [web]
 port = 9001
 
+# 僵尸任务巡检：把「服务端已建单、执行器再也不会来上报」的记录收敛成失败。
+# 执行器优雅停机是第一道防线（秒级），这里是 SIGKILL/OOM/掉电时的兜底（分钟级）。
+# 阈值都按「宁可晚回收，也不要误杀正在跑的任务」来定：被误判的任务跑完后仍会
+# 正常上报、把状态改回真实结果。
+#[jobx-task-reaper]
+#enabled = true
+#scan-interval = "60s"
+# 「已分派但还没开始执行」的宽限期（要大于 发布提前量 + assign-lead 之和）
+#start-grace = "5min"
+# 「已开始执行但没结束」的超时（按最长执行时间的数倍设）
+#exec-timeout = "30min"
+# 高频任务单独一档，它本来就长时间连续执行
+#high-freq-exec-timeout = "6h"
+
 [micro-svc.consul]
 base-url = "http://consul:8500"
 [micro-svc.consul.config]

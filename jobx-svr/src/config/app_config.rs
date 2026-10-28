@@ -1,4 +1,4 @@
-use crate::config::JobxSchedulerConfig;
+use crate::config::{JobxSchedulerConfig, JobxTaskReaperConfig};
 use idworker::IdWorkerConfig;
 use robotech::db::DbConnConfig;
 use robotech::redis::RedisConfig;
@@ -12,6 +12,9 @@ pub struct AppConfig {
     /// jobx_scheduler
     #[serde(default = "JobxSchedulerConfig::default")]
     pub jobx_scheduler: JobxSchedulerConfig,
+    /// jobx_task_reaper（僵尸任务巡检）
+    #[serde(default = "JobxTaskReaperConfig::default")]
+    pub jobx_task_reaper: JobxTaskReaperConfig,
     /// db
     pub db: DbConnConfig,
     /// Web服务器

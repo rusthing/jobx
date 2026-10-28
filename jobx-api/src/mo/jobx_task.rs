@@ -32,6 +32,7 @@ pub struct Model {
     pub interval_duration: Option<String>,
     pub valid_begin_ms: Option<i64>,
     pub valid_end_ms: Option<i64>,
+    pub exec_deadline_ms: Option<i64>,
     pub assign_lead_ms: Option<i32>,
     #[sea_orm(
         belongs_to,

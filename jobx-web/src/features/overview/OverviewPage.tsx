@@ -166,7 +166,12 @@ export function OverviewPage() {
           icon={<Timer className="size-3.5" />}
           footer={
             <span className="flex items-center justify-between">
-              <span>已分派待执行 {data.queued} 条</span>
+              <span>
+                已分派待执行 {data.queued} 条
+                {data.stale > 0 && (
+                  <span className="text-danger"> · {data.stale} 条疑似僵死</span>
+                )}
+              </span>
               <span className="inline-flex items-center gap-1 text-warn">
                 <span className="relative flex size-1.5">
                   <span className="live-dot relative size-1.5 rounded-full bg-warn" />
