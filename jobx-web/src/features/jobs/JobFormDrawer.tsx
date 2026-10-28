@@ -29,6 +29,8 @@ interface FormState {
   intervalUnit: DurationUnit;
   assignLeadSec: string;
   streamMaxLen: string;
+  expireAmount: string;
+  expireUnit: DurationUnit;
   validBegin: string;
   validEnd: string;
   params: string;
@@ -47,6 +49,8 @@ function initialState(job: Job | null): FormState {
       intervalUnit: "m",
       assignLeadSec: "5",
       streamMaxLen: "",
+      expireAmount: "",
+      expireUnit: "d",
       validBegin: "",
       validEnd: "",
       params: "",
@@ -55,6 +59,7 @@ function initialState(job: Job | null): FormState {
   }
 
   const duration = splitDuration(job.intervalDuration);
+  const expire = splitDuration(job.taskExpireDuration);
   return {
     name: job.name,
     executorCode: job.executorCode,
@@ -65,6 +70,9 @@ function initialState(job: Job | null): FormState {
     intervalUnit: duration.unit,
     assignLeadSec: job.assignLeadMs === null ? "" : String(Math.round(job.assignLeadMs / 1_000)),
     streamMaxLen: job.streamMaxLen === null ? "" : String(job.streamMaxLen),
+    // null = 永久保留，表单上用空值表达（splitDuration 对空值会兜底成 300s，必须显式区分）
+    expireAmount: job.taskExpireDuration === null ? "" : String(expire.amount),
+    expireUnit: job.taskExpireDuration === null ? "d" : expire.unit,
     validBegin: toDateTimeLocal(job.validBeginMs),
     validEnd: toDateTimeLocal(job.validEndMs),
     params: job.params ? prettyJson(job.params) : "",
@@ -129,6 +137,11 @@ function JobFormDrawerImpl({
       ? Number(form.intervalAmount) * DURATION_UNIT_MS[form.intervalUnit]
       : null;
 
+  /** 任务保留时长：留空 = 永久保留（null），否则按「数量 × 单位」换算成毫秒 */
+  const expireMs = form.expireAmount.trim()
+    ? Number(form.expireAmount) * DURATION_UNIT_MS[form.expireUnit]
+    : null;
+
   const upcoming = useMemo(() => {
     if (form.jobType !== JOB_TYPE.cron || cronError) return [];
     try {
@@ -158,10 +171,15 @@ function JobFormDrawerImpl({
       form.validBegin && form.validEnd && form.validEnd < form.validBegin
         ? "结束时间不能早于开始时间"
         : null,
+    expire:
+      expireMs !== null && (!Number.isFinite(expireMs) || expireMs <= 0)
+        ? "保留时长必须大于 0"
+        : null,
   };
 
   const invalid =
     Boolean(errors.name || errors.executorCode || errors.interval || errors.validRange) ||
+    Boolean(errors.expire) ||
     Boolean(cronError) ||
     Boolean(paramsError);
 
@@ -177,6 +195,7 @@ function JobFormDrawerImpl({
       intervalDuration: intervalMs,
       assignLeadMs: form.assignLeadSec ? Math.round(Number(form.assignLeadSec) * 1_000) : null,
       streamMaxLen: form.streamMaxLen ? Number(form.streamMaxLen) : null,
+      taskExpireDuration: expireMs,
       validBeginMs: fromDateTimeLocal(form.validBegin),
       validEndMs: fromDateTimeLocal(form.validEnd),
       params: form.params.trim() ? form.params.trim() : null,
@@ -381,6 +400,7 @@ function JobFormDrawerImpl({
                   <option value="s">秒</option>
                   <option value="m">分钟</option>
                   <option value="h">小时</option>
+                  <option value="d">天</option>
                 </Select>
                 {intervalMs ? (
                   <span
@@ -446,6 +466,35 @@ function JobFormDrawerImpl({
               />
             </Field>
           </div>
+
+          <Field
+            label="任务保留时长"
+            error={showError("expire")}
+            hint="超过这个时长的执行记录会被服务端自动清理（按任务创建时刻算）；留空表示永久保留"
+          >
+            <div className="flex gap-2">
+              <Input
+                value={form.expireAmount}
+                onChange={(event) => set("expireAmount", event.target.value)}
+                onBlur={markTouched("expire")}
+                inputMode="decimal"
+                className="w-32 font-mono"
+                placeholder="留空=永久"
+              />
+              <Select
+                value={form.expireUnit}
+                onChange={(event) => set("expireUnit", event.target.value as DurationUnit)}
+                className="w-24"
+              >
+                <option value="d">天</option>
+                <option value="h">小时</option>
+                <option value="m">分钟</option>
+              </Select>
+              <span className="self-center whitespace-nowrap font-mono text-[11px] text-muted">
+                {expireMs ? `= ${formatDuration(expireMs)}` : "永久保留"}
+              </span>
+            </div>
+          </Field>
 
           {highFreqHint && (
             <div className="flex items-start gap-1.5 rounded-lg border border-violet/20 bg-violet-soft/70 px-3 py-2">

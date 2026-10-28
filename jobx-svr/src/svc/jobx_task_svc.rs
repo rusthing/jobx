@@ -2,11 +2,13 @@ use crate::config::{JobxSchedulerConfig, get_jobx_scheduler_config};
 use crate::svc::JobxJobSvc;
 use anyhow::anyhow;
 use jobx_api::dic::TaskStatus;
-use jobx_api::mo::jobx_task;
+use jobx_api::mo::{jobx_job, jobx_task};
+use jobx_api::vo::JobxJobVo;
 use robotech::cst::user_id_cst::SYS_OPERATOR_USER_ID;
 use robotech::macros::svc;
 use sea_orm::sea_query::Expr;
-use sea_orm::{ColumnTrait, Condition, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, Condition, DbBackend, EntityTrait, QueryFilter, Statement};
+use tracing::warn;
 use wheel_rs::time_utils::now_ms;
 
 #[svc(before_add = Self::before_add)]
@@ -228,6 +230,150 @@ impl JobxTaskSvc {
             timed_out,
             high_freq_timed_out,
         })
+    }
+
+    /// # 清理过期任务
+    ///
+    /// 按**计划级**的保留时长（`jobx_job.task_expire_duration`）删除超期的
+    /// `jobx_task` 记录。保留时长为 `NULL` 的计划不参与清理。
+    ///
+    /// ## 过期基准是 `create_ms`
+    ///
+    /// 判定条件是 `create_ms < now - 保留时长`。用创建时刻而不是 `scheduled_exec_start_ms`
+    /// 或 `exec_end_ms`：
+    ///
+    /// - `scheduled_exec_start_ms` 可以被计划改期推到很远，改完之后老记录会被「续命」；
+    /// - `exec_end_ms` 在任务结束前为空，等于「跑不完就永远不清理」，而卡住的记录
+    ///   正是最该被清掉的那批。
+    ///
+    /// `create_ms` 是 NOT NULL、写入后不变，且与 `(job_id, create_ms)` 索引配合最好。
+    ///
+    /// ## 不区分任务状态
+    ///
+    /// `Running` 的超期记录同样会被删。设计上「卡住」由 `jobx-task-reaper` 在分钟级
+    /// 收敛（阈值远小于任何合理的保留时长），等它超期时早已不是 `Running`。
+    /// 真删到了在跑的任务，执行器事后上报只会命中 0 行，不影响执行器本身。
+    ///
+    /// ## 分批与上限
+    ///
+    /// 每个计划每轮最多删 `max_batches_per_job` 批、每批 `batch_size` 行，用
+    /// `delete ... where id in (select id ... limit N)` 实现：一次删几十万行会让事务
+    /// 长时间持锁并打出巨量 WAL，反过来挡住执行器写入新任务记录。
+    ///
+    /// 达到上限时把该计划计入 [`ExpiredTaskCleanResult::truncated`]，下一轮继续。
+    ///
+    /// ## 幂等与并发
+    ///
+    /// DELETE 天然幂等，多副本同时清理最多是重复扫描：后到的 DELETE 命中 0 行。
+    ///
+    /// ## 参数
+    ///
+    /// * `now` - 当前时间戳（毫秒），由调用方传入以便一轮清理内共用同一基准
+    /// * `batch_size` - 单批删除行数（0 按 1 处理）
+    /// * `max_batches_per_job` - 单计划每轮最多删几批（0 按 1 处理）
+    /// * `db` - 数据库连接（事务）
+    #[db_unwrap]
+    #[log_call]
+    pub async fn clean_expired_tasks<C>(
+        now: i64,
+        batch_size: u64,
+        max_batches_per_job: u32,
+        #[skip_log] db: Option<&C>,
+    ) -> Result<ExpiredTaskCleanResult, SvcError>
+    where
+        C: ConnectionTrait,
+    {
+        // 只捞设了保留时长的计划：绝大多数计划是 NULL（永久保留），
+        // 在 SQL 里过滤掉，避免每轮把整张 jobx_job 拉回来。
+        let jobs = jobx_job::Entity::find()
+            .filter(jobx_job::Column::TaskExpireDuration.is_not_null())
+            .into_model::<JobxJobVo>()
+            .all(db)
+            .await
+            .map_err(|e| anyhow!("查询待清理的任务计划失败: {e}"))?;
+
+        let batch_size = batch_size.max(1);
+        let max_batches = max_batches_per_job.max(1);
+        let mut result = ExpiredTaskCleanResult::default();
+
+        for job in jobs {
+            // 查询条件已经保证非空；let-else 是为了将来放宽查询条件时不至于 panic
+            let Some(expire_duration) = job.task_expire_duration else {
+                continue;
+            };
+            // u128 -> i64 饱和转换：极端值（几百年）不该让整轮清理失败
+            let expire_ms = i64::try_from(expire_duration.as_millis()).unwrap_or(i64::MAX);
+            if expire_ms <= 0 {
+                // 0 时长等于「创建即过期」，会把还在跑的任务记录立刻删掉。
+                // 这种配置几乎肯定是误填（例如前端把空值当 0 传上来），跳过并告警。
+                warn!(
+                    "计划 {} ({}) 的任务保留时长为 0，跳过清理（如需永久保留请留空）",
+                    job.name,
+                    job.id.value()
+                );
+                continue;
+            }
+
+            let job_id = job.id.value() as i64;
+            let threshold = now.saturating_sub(expire_ms);
+
+            // 用 id 而不是 ctid 做分批：id 是主键，SQL 也不绑定 PostgreSQL 专有语法
+            let sql = "delete from jobx_task where id in ( \
+                       select id from jobx_task where job_id = $1 and create_ms < $2 limit $3 \
+                       )";
+            let mut deleted = 0u64;
+            let mut drained = false;
+            for _ in 0..max_batches {
+                let statement = Statement::from_sql_and_values(
+                    DbBackend::Postgres,
+                    sql,
+                    [job_id.into(), threshold.into(), (batch_size as i64).into()],
+                );
+                let affected = db
+                    .execute_raw(statement)
+                    .await
+                    .map_err(|e| anyhow!("清理计划 {job_id} 的过期任务失败: {e}"))?
+                    .rows_affected();
+                deleted += affected;
+                // 这一批没删满，说明已删干净，不用再试
+                if affected < batch_size {
+                    drained = true;
+                    break;
+                }
+            }
+
+            if deleted > 0 {
+                result.jobs += 1;
+                result.deleted += deleted;
+            }
+            // 批次数用尽且最后一批仍是满的：大概率还有剩余，留给下一轮
+            if !drained {
+                result.truncated += 1;
+            }
+        }
+
+        Ok(result)
+    }
+}
+
+/// # 过期任务清理结果
+///
+/// 三个计数分开报，是为了让日志能区分「正常清理」和「积压没清完」：
+/// 只有 `truncated > 0` 才需要人去调 `batch-size` / `max-batches-per-job`。
+#[derive(Debug, Default, Clone, Copy)]
+pub struct ExpiredTaskCleanResult {
+    /// 本轮真正删到行的计划数
+    pub jobs: u64,
+    /// 本轮删除的任务记录行数
+    pub deleted: u64,
+    /// 达到批次数上限、大概率仍有剩余的计划数
+    pub truncated: u64,
+}
+
+impl ExpiredTaskCleanResult {
+    /// 本轮是否删到了东西（用于决定要不要打日志）
+    pub fn total(&self) -> u64 {
+        self.deleted
     }
 }
 

@@ -86,6 +86,17 @@ pub struct JobxJobConfig {
     #[serde(default = "stream_max_len_default")]
     #[builder(default = stream_max_len_default())]
     pub stream_max_len: Option<u32>,
+    /// 任务保留时长
+    ///
+    /// 该计划产生的任务记录（`jobx_task`）超过这个时长后会被服务端自动清理。
+    /// 基准是**任务的创建时刻**（`create_ms`），与任务是否执行完无关。
+    ///
+    /// `None` 表示永久保留（默认），不参与清理。高频计划建议显式设一个值，
+    /// 否则 `jobx_task` 会按「每天 1440 / 间隔秒数」的速率无限增长。
+    #[into(Some(~.map(|d| robotech::api::Duration::from(d))))]
+    #[serde(with = "duration_option_serde", default)]
+    #[builder(default)]
+    pub task_expire_duration: Option<Duration>,
     /// 备注
     #[into(Some(~))]
     #[serde(default)]

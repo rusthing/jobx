@@ -64,6 +64,8 @@ interface JobSeed {
   enabled: boolean;
   assignLeadMs: number;
   streamMaxLen?: number;
+  /** 任务保留时长（毫秒），不填表示永久保留 */
+  taskExpireDuration?: number;
   validEndOffsetDays?: number;
   createdDaysAgo: number;
 }
@@ -79,6 +81,7 @@ const JOB_SEEDS: JobSeed[] = [
     enabled: true,
     assignLeadMs: 2_000,
     streamMaxLen: 20_000,
+    taskExpireDuration: 7 * DAY,
     createdDaysAgo: 46,
   },
   {
@@ -90,6 +93,7 @@ const JOB_SEEDS: JobSeed[] = [
     remark: "补偿上游状态机漏推",
     enabled: true,
     assignLeadMs: 5_000,
+    taskExpireDuration: 30 * DAY,
     createdDaysAgo: 41,
   },
   {
@@ -238,6 +242,7 @@ function buildJob(seed: JobSeed, index: number): Job {
     assignLeadMs: seed.assignLeadMs,
     nextAssignMs: null,
     streamMaxLen: seed.streamMaxLen ?? null,
+    taskExpireDuration: seed.taskExpireDuration ?? null,
     remark: seed.remark ?? null,
     enabled: seed.enabled,
     createrId: "1",
@@ -561,6 +566,7 @@ export const mockJobs = {
       assignLeadMs: payload.assignLeadMs ?? null,
       nextAssignMs: null,
       streamMaxLen: payload.streamMaxLen ?? null,
+      taskExpireDuration: payload.taskExpireDuration ?? null,
       remark: payload.remark ?? null,
       createrId: "1",
       createMs: String(now),

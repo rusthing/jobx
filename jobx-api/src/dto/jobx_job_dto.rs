@@ -40,6 +40,12 @@ pub struct JobxJobDto {
     /// 发布该计划的消息时使用的 Stream 长度上限（MAXLEN ~ N）
     /// 为空时采用调度器的全局默认值（jobx-scheduler.stream-max-len，默认 10000）
     pub stream_max_len: Option<u32>,
+    /// 任务保留时长
+    ///
+    /// 该计划产生的任务记录（`jobx_task`）超过这个时长后会被服务端自动清理。
+    /// 基准是**任务的创建时刻**（`create_ms`），与任务是否执行完无关；
+    /// 留空（null）表示永久保留，不参与清理。
+    pub task_expire_duration: Option<Duration>,
     /// 备注
     /// @len 0..=50
     pub remark: Option<String>,

@@ -804,6 +804,7 @@ create table jobx_job (
    assign_lead_ms       INT4                 null,
    next_assign_ms       INT8                 null,
    stream_max_len       INT4                 null,
+   task_expire_duration VARCHAR(30)          null,
    remark               VARCHAR(50)          null,
    enabled              BOOL                 not null default true,
    creater_id           INT8                 not null,
@@ -969,10 +970,11 @@ create table jobx_job (
         db.execute_unprepared(CREATE_JOBX_JOB)
             .await
             .expect("create table 失败");
-        // list_publishable 的去重子查询只用到这三列，测试里给最小定义即可
+        // list_publishable 的去重子查询只用到这三列；clean_expired_tasks 用到 create_ms，
+        // 测试里给最小定义即可
         db.execute_unprepared(
             "create table jobx_task (id INT8 not null primary key, job_id INT8 null, \
-             scheduled_exec_start_ms INT8 null)",
+             scheduled_exec_start_ms INT8 null, create_ms INT8 null)",
         )
         .await
         .expect("create jobx_task 失败");
@@ -1285,5 +1287,107 @@ create table jobx_job (
             .expect("查询失败");
         assert_eq!(after.len(), 1, "拉回后应当重新进入可发布列表");
         assert_eq!(after[0].id, U64::from(1u64));
+    }
+
+    // ================= 过期任务清理 =================
+
+    /// 给计划设上「任务保留时长」（humantime 字符串，与 `Duration` 落库的格式一致）
+    async fn set_job_expire(db: &sea_orm::DatabaseConnection, id: i64, expire: &str) {
+        db.execute_unprepared(&format!(
+            "update jobx_job set task_expire_duration = '{expire}' where id = {id}"
+        ))
+        .await
+        .expect("update task_expire_duration 失败");
+    }
+
+    async fn insert_task(db: &sea_orm::DatabaseConnection, id: i64, job_id: i64, create_ms: i64) {
+        db.execute_unprepared(&format!(
+            "insert into jobx_task (id, job_id, scheduled_exec_start_ms, create_ms) \
+             values ({id}, {job_id}, {create_ms}, {create_ms})"
+        ))
+        .await
+        .expect("insert task 失败");
+    }
+
+    async fn task_ids(db: &sea_orm::DatabaseConnection) -> Vec<i64> {
+        let rows = db
+            .query_all_raw(sea_orm::Statement::from_string(
+                sea_orm::DbBackend::Postgres,
+                "select id from jobx_task order by id",
+            ))
+            .await
+            .expect("查询任务失败");
+        rows.iter()
+            .map(|row| row.try_get_by::<i64, _>("id").expect("读 id 失败"))
+            .collect()
+    }
+
+    /// 按**计划级**保留时长清理：只删 `create_ms` 超期的行，`NULL` 计划一条不删
+    #[tokio::test]
+    async fn clean_expired_tasks_respects_per_job_retention() {
+        let _guard = DB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(db) = connect_test_db().await else {
+            return;
+        };
+        reset_table(&db).await;
+
+        let now = now_ms() as i64;
+        let day = 24 * 3_600_000i64;
+
+        insert_job(&db, 1, "keep-7d", 2, false, None, Some("5min"), Some(60_000), Some(now), true)
+            .await;
+        set_job_expire(&db, 1, "7days").await;
+        // 计划2 不设保留时长（NULL）→ 永久保留
+        insert_job(&db, 2, "keep-forever", 2, false, None, Some("5min"), Some(60_000), Some(now), true)
+            .await;
+
+        insert_task(&db, 11, 1, now - 8 * day).await; // 超期 → 删
+        insert_task(&db, 12, 1, now - 6 * day).await; // 未超期 → 留
+        insert_task(&db, 21, 2, now - 100 * day).await; // 计划2 没设 → 留
+
+        let result = JobxTaskSvc::clean_expired_tasks(now, 1000, 10, Some(&db))
+            .await
+            .expect("清理失败");
+
+        assert_eq!(result.deleted, 1, "只有计划1那条 8 天前的记录该被删");
+        assert_eq!(result.jobs, 1);
+        assert_eq!(result.truncated, 0);
+        assert_eq!(task_ids(&db).await, vec![12, 21]);
+
+        // 幂等：再跑一轮不该再删到任何东西
+        let again = JobxTaskSvc::clean_expired_tasks(now, 1000, 10, Some(&db))
+            .await
+            .expect("第二次清理失败");
+        assert_eq!(again.deleted, 0);
+    }
+
+    /// 批次数用尽仍有剩余时，标记 `truncated`，把剩余留给下一轮
+    #[tokio::test]
+    async fn clean_expired_tasks_reports_truncated_when_batches_exhausted() {
+        let _guard = DB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(db) = connect_test_db().await else {
+            return;
+        };
+        reset_table(&db).await;
+
+        let now = now_ms() as i64;
+        let day = 24 * 3_600_000i64;
+
+        insert_job(&db, 1, "keep-1d", 2, false, None, Some("5min"), Some(60_000), Some(now), true)
+            .await;
+        set_job_expire(&db, 1, "1day").await;
+
+        // 3 条超期记录；每批 1 行、最多 1 批 → 只删 1 条，剩 2 条留给下一轮
+        insert_task(&db, 11, 1, now - 5 * day).await;
+        insert_task(&db, 12, 1, now - 4 * day).await;
+        insert_task(&db, 13, 1, now - 3 * day).await;
+
+        let result = JobxTaskSvc::clean_expired_tasks(now, 1, 1, Some(&db))
+            .await
+            .expect("清理失败");
+
+        assert_eq!(result.deleted, 1);
+        assert_eq!(result.truncated, 1, "批次数用尽必须标记 truncated");
+        assert_eq!(task_ids(&db).await, vec![12, 13]);
     }
 }

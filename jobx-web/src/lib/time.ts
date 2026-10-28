@@ -98,6 +98,12 @@ export function formatDuration(value: TimeInput): string {
     const seconds = Math.round((ms % 60_000) / 1_000);
     return `${minutes}m ${pad(seconds)}s`;
   }
+  // 保留时长动辄以天计（7 天 = 168h），超过一天先按天说，读起来才不像天文数字
+  if (ms >= 86_400_000) {
+    const days = Math.floor(ms / 86_400_000);
+    const hours = Math.floor((ms % 86_400_000) / 3_600_000);
+    return hours ? `${days}d ${hours}h` : `${days}d`;
+  }
   const hours = Math.floor(ms / 3_600_000);
   const minutes = Math.floor((ms % 3_600_000) / 60_000);
   return `${hours}h ${pad(minutes)}m`;
@@ -106,19 +112,21 @@ export function formatDuration(value: TimeInput): string {
 /** 把毫秒拆成便于表单编辑的「数量 + 单位」 */
 export function splitDuration(ms: number | null | undefined): { amount: number; unit: DurationUnit } {
   if (!ms || ms <= 0) return { amount: 300, unit: "s" };
+  if (ms % 86_400_000 === 0) return { amount: ms / 86_400_000, unit: "d" };
   if (ms % 3_600_000 === 0) return { amount: ms / 3_600_000, unit: "h" };
   if (ms % 60_000 === 0) return { amount: ms / 60_000, unit: "m" };
   if (ms % 1_000 === 0) return { amount: ms / 1_000, unit: "s" };
   return { amount: ms, unit: "ms" };
 }
 
-export type DurationUnit = "ms" | "s" | "m" | "h";
+export type DurationUnit = "ms" | "s" | "m" | "h" | "d";
 
 export const DURATION_UNIT_MS: Record<DurationUnit, number> = {
   ms: 1,
   s: 1_000,
   m: 60_000,
   h: 3_600_000,
+  d: 86_400_000,
 };
 
 /** 用于 `<input type="datetime-local">` 的本地时间字符串 */

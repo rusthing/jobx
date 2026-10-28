@@ -22,6 +22,7 @@ pub struct Model {
     pub assign_lead_ms: Option<i32>,
     pub next_assign_ms: Option<i64>,
     pub stream_max_len: Option<i32>,
+    pub task_expire_duration: Option<String>,
     pub remark: Option<String>,
     pub enabled: bool,
     pub creater_id: i64,

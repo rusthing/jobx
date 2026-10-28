@@ -21,6 +21,7 @@ create table jobx_job (
    assign_lead_ms       INT4                 null,
    next_assign_ms       INT8                 null,
    stream_max_len       INT4                 null,
+   task_expire_duration VARCHAR(30)          null,
    remark               VARCHAR(50)          null,
    enabled              BOOL                 not null default true,
    creater_id           INT8                 not null,
@@ -86,6 +87,12 @@ comment on column jobx_job.next_assign_ms is
 comment on column jobx_job.stream_max_len is
 '发布该计划的消息时使用的 Stream 长度上限（MAXLEN ~ N）
 为空时采用配置文件中 jobx.scheduler.stream-max-len 的默认值';
+
+comment on column jobx_job.task_expire_duration is
+'任务保留时长
+该计划产生的任务记录超过这个时长后会被服务端自动清理
+基准是任务的创建时刻（create_ms），与任务是否执行完无关
+为空表示永久保留，不参与清理';
 
 comment on column jobx_job.remark is
 '备注

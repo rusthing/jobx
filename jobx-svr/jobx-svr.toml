@@ -23,6 +23,18 @@ port = 9001
 # 高频任务单独一档，它本来就长时间连续执行
 #high-freq-exec-timeout = "6h"
 
+# 过期任务清理：按计划上的 task-expire-duration 删除超期的 jobx_task 记录。
+# 保留时长是**计划级字段**（留空 = 永久保留），这里只控制清理本身的节奏。
+# 与 jobx-task-reaper 的分工：reaper 管状态（Running 收敛成 Failed，记录留着），
+# cleaner 管行数（超期整行删掉，不看状态）。
+#[jobx-task-cleaner]
+#enabled = true
+#scan-interval = "10min"
+# 单批删除行数：分批删是为了不长时间持锁、不打爆 WAL
+#batch-size = 1000
+# 单计划每轮最多删几批（默认 20 → 单计划每轮上限 2 万行，积压会分几轮清完）
+#max-batches-per-job = 20
+
 # 调度器：next_assign_ms 的推进是开环的（起点取旧值、不对齐墙钟），所以滞后不会自愈。
 # 发布窗口的下界是 query-start-earlier-duration（默认 3 天），滞后一旦超过它，
 # 计划就再也落不进窗口 —— 静默停摆。max-assign-lag-duration 把「停摆」变成

@@ -53,6 +53,13 @@ export interface Job {
   nextAssignMs: string | null;
   /** 发布到 Redis Stream 时的 MAXLEN 近似上限 */
   streamMaxLen: number | null;
+  /**
+   * 任务保留时长，毫秒。
+   *
+   * 该计划产生的执行记录超过这个时长后会被服务端自动清理（基准是任务的创建时刻）。
+   * `null` = 永久保留，不参与清理。
+   */
+  taskExpireDuration: number | null;
   remark: string | null;
   enabled: boolean;
   createrId: string;
@@ -107,6 +114,8 @@ export interface JobInput {
   validEndMs?: string | null;
   assignLeadMs?: number | null;
   streamMaxLen?: number | null;
+  /** 任务保留时长，毫秒；不传或 null = 永久保留 */
+  taskExpireDuration?: number | null;
   remark?: string | null;
   enabled: boolean;
 }

@@ -4900,6 +4900,24 @@ DAT 1788921306</a:History>
 <a:Column.Mandatory>1</a:Column.Mandatory>
 <a:GlobalObjectID/>
 </o:Column>
+<o:Column Id="o74">
+<a:ObjectID>A1C5F9A9-3F6E-4249-AA50-FE995D9FDD82</a:ObjectID>
+<a:Name>任务保留时长</a:Name>
+<a:Code>task_expire_duration</a:Code>
+<a:CreationDate>1793190774</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1793190774</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:Comment>任务保留时长
+该计划产生的任务记录超过这个时长后会被服务端自动清理
+基准是任务的创建时刻（create_ms），与任务是否执行完无关
+为空表示永久保留，不参与清理</a:Comment>
+<a:History>ORG {06572E22-ABDA-40CA-AD6D-AA73FB2F234D}
+DAT 1793190774</a:History>
+<a:DataType>VARCHAR(30)</a:DataType>
+<a:Length>30</a:Length>
+<a:GlobalObjectID/>
+</o:Column>
 </c:Columns>
 <c:Keys>
 <o:Key Id="o31">

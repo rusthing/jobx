@@ -1885,6 +1885,22 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:LogicalAttribute.Mandatory>1</a:LogicalAttribute.Mandatory>
 <a:GlobalObjectID/>
 </o:EntityAttribute>
+<o:EntityAttribute Id="o62">
+<a:ObjectID>06572E22-ABDA-40CA-AD6D-AA73FB2F234D</a:ObjectID>
+<a:Name>任务保留时长</a:Name>
+<a:Code>task_expire_duration</a:Code>
+<a:CreationDate>1793190774</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1793190774</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:Comment>任务保留时长
+该计划产生的任务记录超过这个时长后会被服务端自动清理
+基准是任务的创建时刻（create_ms），与任务是否执行完无关
+为空表示永久保留，不参与清理</a:Comment>
+<a:DataType>VA30</a:DataType>
+<a:Length>30</a:Length>
+<a:GlobalObjectID/>
+</o:EntityAttribute>
 </c:Attributes>
 </o:Entity>
 <o:Entity Id="o11">
