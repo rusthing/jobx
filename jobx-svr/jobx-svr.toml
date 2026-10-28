@@ -23,6 +23,23 @@ port = 9001
 # 高频任务单独一档，它本来就长时间连续执行
 #high-freq-exec-timeout = "6h"
 
+# 调度器：next_assign_ms 的推进是开环的（起点取旧值、不对齐墙钟），所以滞后不会自愈。
+# 发布窗口的下界是 query-start-earlier-duration（默认 3 天），滞后一旦超过它，
+# 计划就再也落不进窗口 —— 静默停摆。max-assign-lag-duration 把「停摆」变成
+# 「拉回当前时间 + 告警」：滞后超过这个值的计划，next_assign_ms 直接改成 now。
+# 它同时决定「停机多久之内还保留补拍语义」，必须小于 query-start-earlier-duration。
+#[jobx-scheduler]
+#scan-interval = "60s"
+#query-start-earlier-duration = "72h"
+#query-end-later-duration = "60s"
+#assign-lead-duration = "60s"
+#high-freq-threshold-duration = "60s"
+#high-freq-assign-interval = "5min"
+#max-assign-lag-duration = "60m"
+#publish-max-retries = 5
+#publish-retry-interval = "8s"
+#stream-max-len = 10000
+
 [micro-svc.consul]
 base-url = "http://consul:8500"
 [micro-svc.consul.config]

@@ -16,6 +16,15 @@ pub fn setup_jobx_scheduler(
     changed: &Option<HashMap<String, Value>>,
 ) {
     info!("setup jobx scheduler config...: {schedule_config:?}");
+    // 滞后兜底的阈值必须小于查询窗口的下界，否则「滞后超阈值」的计划
+    // 早就落到窗口外了，两条规则互相矛盾，兜底永远不触发。
+    if schedule_config.max_assign_lag_duration >= schedule_config.query_start_earlier_duration {
+        warn!(
+            "max-assign-lag-duration({:?}) 不小于 query-start-earlier-duration({:?})，\
+             滞后兜底将永远不会触发",
+            schedule_config.max_assign_lag_duration, schedule_config.query_start_earlier_duration
+        );
+    }
     if changed
         .as_ref()
         .map(|changed| has_config_changed(JOBX_SCHEDULER_CONFIG_KEY, changed))

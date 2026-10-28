@@ -34,6 +34,8 @@ impl JobxTaskSvc {
     /// 退化为 `assign_ms`（即创建时刻）。
     ///
     /// 非高频任务不写这个字段：它们的执行是一次性的，结束条件由执行器自己掌握。
+    ///
+    /// 纯计算部分抽到 [`Self::calc_exec_deadline`]，便于单测覆盖边界。
     async fn before_add<C: ConnectionTrait>(
         mut add_dto: JobxTaskAddDto,
         _db: &C,
@@ -51,18 +53,26 @@ impl JobxTaskSvc {
                 .map(|v| v.value())
                 .or_else(|| add_dto.assign_ms.as_ref().map(|v| v.value()))
                 .unwrap_or_else(now_ms);
-            let segment_end_ms =
-                start_ms.saturating_add(high_freq_assign_interval.as_millis() as u64);
-            // 计划有效期更早时以它为准：那之后本来就不该再执行
-            let deadline_ms = add_dto
-                .valid_end_ms
-                .flatten()
-                .map(|v| v.value())
-                .map_or(segment_end_ms, |valid_end| segment_end_ms.min(valid_end));
+            let deadline_ms = Self::calc_exec_deadline(
+                start_ms,
+                add_dto.valid_end_ms.flatten().map(|v| v.value()),
+                high_freq_assign_interval.as_millis() as u64,
+            );
 
             add_dto.exec_deadline_ms = Some(Some(U64::from(deadline_ms)));
         }
         Ok(add_dto)
+    }
+
+    /// # 计算高频任务本段的执行截止时刻
+    ///
+    /// `min(valid_end_ms, start_ms + hf_interval_ms)`，`valid_end_ms` 为空表示不设上限。
+    ///
+    /// 用饱和加法：`start_ms` 接近 `u64::MAX`（手工触发传了极端值）时不能溢出。
+    /// 计划有效期更早时以它为准——那之后本来就不该再执行。
+    fn calc_exec_deadline(start_ms: u64, valid_end_ms: Option<u64>, hf_interval_ms: u64) -> u64 {
+        let segment_end_ms = start_ms.saturating_add(hf_interval_ms);
+        valid_end_ms.map_or(segment_end_ms, |valid_end| segment_end_ms.min(valid_end))
     }
 }
 
@@ -239,5 +249,44 @@ impl ZombieReapResult {
     /// 本次回收总数
     pub fn total(&self) -> u64 {
         self.not_started + self.timed_out + self.high_freq_timed_out
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const HF: u64 = 300_000;
+
+    /// 无有效期上限：截止 = 起点 + 高频间隔
+    #[test]
+    fn deadline_is_start_plus_interval() {
+        assert_eq!(JobxTaskSvc::calc_exec_deadline(1_000, None, HF), 301_000);
+    }
+
+    /// 计划有效期更早：以有效期为准
+    #[test]
+    fn deadline_respects_earlier_valid_end() {
+        assert_eq!(
+            JobxTaskSvc::calc_exec_deadline(1_000, Some(200_000), HF),
+            200_000
+        );
+    }
+
+    /// 计划有效期更晚：仍取本段终点
+    #[test]
+    fn deadline_ignores_later_valid_end() {
+        assert_eq!(
+            JobxTaskSvc::calc_exec_deadline(1_000, Some(999_999), HF),
+            301_000
+        );
+    }
+
+    /// 起点接近 u64::MAX 时饱和，不溢出
+    #[test]
+    fn deadline_saturates_on_overflow() {
+        assert_eq!(
+            JobxTaskSvc::calc_exec_deadline(u64::MAX - 10, None, HF),
+            u64::MAX
+        );
     }
 }

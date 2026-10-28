@@ -41,6 +41,26 @@ pub struct JobxSchedulerConfig {
     /// 查询结束时间比当前晚多少时间
     #[serde(default = "query_end_later_duration_default")]
     pub query_end_later_duration: Duration,
+    /// 允许的最大分派滞后
+    ///
+    /// `next_assign_ms` 落后 `now` 超过这个值，说明逻辑时间轴已经失去意义：长时间停机、
+    /// worker 长期掉线、或者积压到追赶速率追不上。调度器每轮扫描前会把这类计划直接
+    /// 拉回 `now`（丢弃错过的拍子，从现在重新开始）并打一条 warn。
+    ///
+    /// ## 为什么必须有这一档
+    ///
+    /// 发布窗口是 `[now - query_start_earlier_duration, now + query_end_later_duration]`，
+    /// 而 `next_assign_ms` 的推进是**开环**的（起点取旧值、不对齐墙钟）。一旦滞后超过
+    /// `query_start_earlier_duration`（默认 3 天），计划就落不进窗口，**永远不会再被发布**
+    /// —— 静默停摆，日志里一条记录都没有。这一档把「停摆」变成「恢复 + 告警」。
+    ///
+    /// ## 默认 1 小时
+    ///
+    /// 必须小于 `query_start_earlier_duration`，否则永远不会触发（启动时会 warn）。
+    /// 也不要调得太小：它同时决定「停机多久之内还保留补拍语义」，超过这个值之后
+    /// 错过的拍子会被丢弃，只补当前这一拍。
+    #[serde(with = "duration_serde", default = "max_assign_lag_duration_default")]
+    pub max_assign_lag_duration: Duration,
     /// 分配任务提前多少时间
     #[serde(with = "duration_serde", default = "assign_lead_duration_default")]
     pub assign_lead_duration: Duration,
@@ -108,6 +128,7 @@ impl Default for JobxSchedulerConfig {
             scan_interval: scan_interval_default(),
             query_start_earlier_duration: query_start_earlier_duration_default(),
             query_end_later_duration: query_end_later_duration_default(),
+            max_assign_lag_duration: max_assign_lag_duration_default(),
             assign_lead_duration: assign_lead_duration_default(),
             high_freq_threshold_duration: high_freq_threshold_default(),
             high_freq_assign_interval: high_freq_assign_interval_default(),
@@ -132,6 +153,10 @@ fn query_start_earlier_duration_default() -> Duration {
 
 fn query_end_later_duration_default() -> Duration {
     Duration::from_secs(60)
+}
+
+fn max_assign_lag_duration_default() -> Duration {
+    Duration::from_mins(60)
 }
 
 fn assign_lead_duration_default() -> Duration {

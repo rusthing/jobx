@@ -1,13 +1,17 @@
 use crate::config::{JobxSchedulerConfig, get_jobx_scheduler_config};
+use anyhow::anyhow;
 use chrono::{TimeZone, Utc};
 use cron::Schedule;
 use jobx_api::dic::JobType;
 use jobx_api::dto::JobxJobModifyDto;
+use jobx_api::mo::jobx_job;
 use robotech::api;
+use robotech::cst::user_id_cst::SYS_OPERATOR_USER_ID;
 use robotech::db::get_db_conn;
 use robotech::macros::svc;
 use robotech::redis::publish_to_stream_with_maxlen;
-use sea_orm::ActiveValue;
+use sea_orm::sea_query::Expr;
+use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
 use std::str::FromStr;
 use tracing::{info, warn};
 use wheel_rs::time_utils::now_ms;
@@ -136,7 +140,11 @@ impl JobxJobSvc {
             Err(validator::ValidationError::new("无下一次执行时间"))?
         }
 
-        let next_assign_ms = next_exec_ms - assign_lead_ms;
+        // 用饱和减法而不是裸减：`next_exec_ms < assign_lead_ms` 时裸减会 u64 下溢
+        // （debug 构建直接 panic，release 构建回绕成一个巨大的时间戳，比 panic 更难查）。
+        // 正常情况下起点是 now / valid_begin_ms / 旧 next_assign_ms，触发不到；
+        // 但 `valid_begin_ms` 允许被设成很小的值（甚至 0），一旦有人这么配就炸在这里。
+        let next_assign_ms = next_exec_ms.saturating_sub(assign_lead_ms);
 
         Ok((Some(next_assign_ms), is_high_freq_task))
     }
@@ -256,11 +264,77 @@ impl JobxJobSvc {
         Ok(add_dto)
     }
 
+    /// # 判断本次 modify 是否真的改动了调度参数
+    ///
+    /// `next_assign_ms` 是派生字段，重算它等于**把调度节奏重置到 `now`**：正在跑的计划
+    /// 会立刻多分派一次，已经积累的滞后会被抹掉。所以只在调度参数真的变了才重算——
+    /// 改名称、改备注、改执行参数这类操作不该有调度副作用。
+    ///
+    /// 比较的是「合并后的有效值」与库里的现值。`Option<Option<T>>` 的语义：
+    /// 外层 `None` = 本次没传该字段（取库值），`Some(内层)` = 以 DTO 为准
+    /// （内层 `None` 表示显式清空）。
+    ///
+    /// 另外「库里 `next_assign_ms` 为空、但计划本该参与调度」也算需要重算：
+    /// 那说明它从没被正确初始化过，不重算就永远不会被分派。
+    fn schedule_changed(dto: &JobxJobModifyDto, existing: &JobxJobVo) -> bool {
+        if existing.next_assign_ms.is_none() {
+            return true;
+        }
+
+        let job_type = dto.job_type.unwrap_or(existing.job_type);
+        if job_type != existing.job_type {
+            return true;
+        }
+
+        let cron = match &dto.cron {
+            Some(v) => v.clone(),
+            None => existing.cron.clone(),
+        };
+        if cron != existing.cron {
+            return true;
+        }
+
+        let interval = match &dto.interval_duration {
+            Some(v) => v.as_ref().map(|d| d.as_duration()),
+            None => existing.interval_duration.as_ref().map(|d| d.as_duration()),
+        };
+        if interval != existing.interval_duration.as_ref().map(|d| d.as_duration()) {
+            return true;
+        }
+
+        let valid_begin = match &dto.valid_begin_ms {
+            Some(v) => v.as_ref().map(|v| v.value()),
+            None => existing.valid_begin_ms.as_ref().map(|v| v.value()),
+        };
+        if valid_begin != existing.valid_begin_ms.as_ref().map(|v| v.value()) {
+            return true;
+        }
+
+        let valid_end = match &dto.valid_end_ms {
+            Some(v) => v.as_ref().map(|v| v.value()),
+            None => existing.valid_end_ms.as_ref().map(|v| v.value()),
+        };
+        if valid_end != existing.valid_end_ms.as_ref().map(|v| v.value()) {
+            return true;
+        }
+
+        let assign_lead = match &dto.assign_lead_ms {
+            Some(v) => v.as_ref().map(|v| v.value()),
+            None => existing.assign_lead_ms.as_ref().map(|v| v.value()),
+        };
+        assign_lead != existing.assign_lead_ms.as_ref().map(|v| v.value())
+    }
+
     /// # modify 前置钩子：计算修改任务计划时的调度字段
     ///
     /// 根据 DTO 中设置的调度参数，与数据库原值合并后重新计算 `next_assign_ms`、`high_freq`。
     /// Manual 类型任务不参与调度，对应字段置为 None。
     /// 此钩子由 `#[svc]` 宏在 `modify` 方法中自动调用，调用时机在校验 DTO 之前。
+    ///
+    /// ## 只有调度参数变了才重算
+    ///
+    /// 见 [`Self::schedule_changed`]。未发生变化时保持 `next_assign_ms` / `high_freq`
+    /// 为 `None`（= 不更新该列），调度节奏不受影响。
     ///
     /// 合并策略：DTO 中未传的字段（外层 `Option` 为 `None`）使用数据库原值，
     /// 显式设置为 null 的字段（`Some(None)`）或传了具体值的字段（`Some(Some(v))`）以 DTO 为准。
@@ -268,6 +342,7 @@ impl JobxJobSvc {
     /// ## 参数
     ///
     /// * `modify_dto` - 任务计划修改 DTO，钩子会修改其中的调度派生字段并通过返回值写回。
+    /// * `db` - 数据库连接（用框架传入的连接，便于在事务内执行与测试注入）
     ///
     /// ## 返回值
     ///
@@ -275,63 +350,55 @@ impl JobxJobSvc {
     /// * `Err` — 参数不完整、原记录不存在或调度计算失败。
     async fn before_modify<C: ConnectionTrait>(
         mut modify_dto: JobxJobModifyDto,
-        _db: &C,
+        db: &C,
     ) -> Result<JobxJobModifyDto, SvcError> {
-        let modify_dto_clone = modify_dto.clone();
-        let id = modify_dto_clone
+        let id = modify_dto
             .id
             .ok_or_else(|| validator::ValidationError::new("修改操作必须提供id"))?;
 
-        // next_assign_ms 是派生字段（基于调度参数和 now 计算），每次 modify 都需刷新
-        if let Some(job_type) = modify_dto_clone.job_type.clone()
-            && job_type == JobType::Manual
-        {
+        let existing = JobxJobDao::get_by_id::<_, JobxJobVo>(id, db)
+            .await?
+            .ok_or_else(|| SvcError::NotFound(id.to_string()))?;
+
+        let job_type = modify_dto.job_type.unwrap_or(existing.job_type);
+        if job_type == JobType::Manual {
+            // 转成（或保持）Manual：调度派生字段必须清空，否则列表里看起来还在排队
             modify_dto.assign_lead_ms = Some(None);
             modify_dto.high_freq = Some(None);
             modify_dto.next_assign_ms = Some(None);
-        } else {
-            let db = get_db_conn()?;
+        } else if Self::schedule_changed(&modify_dto, &existing) {
+            let cron = modify_dto.cron.clone().or(Some(existing.cron.clone()));
+            let interval_duration = modify_dto
+                .interval_duration
+                .clone()
+                .or(Some(existing.interval_duration.clone()));
+            let valid_begin_ms = modify_dto
+                .valid_begin_ms
+                .clone()
+                .or(Some(existing.valid_begin_ms.clone()));
+            let valid_end_ms = modify_dto
+                .valid_end_ms
+                .clone()
+                .or(Some(existing.valid_end_ms.clone()));
+            let assign_lead_ms = modify_dto
+                .assign_lead_ms
+                .map(|v| v.map(|v| U64::from(v.value() as u64)))
+                .or(Some(
+                    existing.assign_lead_ms.map(|v| U64::from(v.value() as u64)),
+                ));
 
-            let existing = JobxJobDao::get_by_id::<_, JobxJobVo>(id, db.as_ref())
-                .await?
-                .ok_or_else(|| SvcError::NotFound(id.to_string()))?;
+            let (next_assign_ms, high_freq) = Self::calc_job_schedule(
+                job_type,
+                cron,
+                interval_duration,
+                valid_begin_ms,
+                valid_end_ms,
+                assign_lead_ms,
+            )?;
 
-            let job_type = modify_dto_clone.job_type.unwrap_or(existing.job_type);
-            if job_type == JobType::Manual {
-                modify_dto.assign_lead_ms = Some(None);
-                modify_dto.high_freq = Some(None);
-                modify_dto.next_assign_ms = Some(None);
-            } else {
-                let cron = modify_dto_clone.cron.or(Some(existing.cron.clone()));
-                let interval_duration = modify_dto_clone
-                    .interval_duration
-                    .or(Some(existing.interval_duration.clone()));
-                let valid_begin_ms = modify_dto_clone
-                    .valid_begin_ms
-                    .or(Some(existing.valid_begin_ms.clone()));
-                let valid_end_ms = modify_dto_clone
-                    .valid_end_ms
-                    .or(Some(existing.valid_end_ms.clone()));
-                let assign_lead_ms = modify_dto_clone
-                    .assign_lead_ms
-                    .map(|v| v.map(|v| U64::from(v.value() as u64)))
-                    .or(Some(
-                        existing.assign_lead_ms.map(|v| U64::from(v.value() as u64)),
-                    ));
-
-                let (next_assign_ms, high_freq) = Self::calc_job_schedule(
-                    job_type,
-                    cron,
-                    interval_duration,
-                    valid_begin_ms,
-                    valid_end_ms,
-                    assign_lead_ms,
-                )?;
-
-                modify_dto.next_assign_ms =
-                    Some(next_assign_ms.map(|next_assign_ms| next_assign_ms.into()));
-                modify_dto.high_freq = Some(Some(high_freq));
-            }
+            modify_dto.next_assign_ms =
+                Some(next_assign_ms.map(|next_assign_ms| next_assign_ms.into()));
+            modify_dto.high_freq = Some(Some(high_freq));
         }
 
         Ok(modify_dto)
@@ -344,11 +411,22 @@ impl JobxJobSvc {
     ///
     /// ## 推进策略
     ///
-    /// 在调用 `calc_next_assign` 之前先根据任务类型对起始时间 (`after_ms`) 做预偏移：
-    /// - **高频任务**：`next_assign_ms + high_freq_assign_interval`（避免高频任务过于密集地重新分派）
-    /// - **普通任务**：`next_assign_ms + assign_lead_ms + interval_duration`
-    ///   - `assign_lead_ms` 与 `calc_next_assign` 末尾的减法抵消，使计算基准对齐执行时间点
-    ///   - `interval_duration` 使 FixedDelay/FixedRate 任务真正向前推进（Cron 为 0，不影响）
+    /// 在调用 `calc_next_assign` 之前先对起始时间 (`after_ms`) 做预偏移，两个分支都形如
+    /// `next_assign_ms + assign_lead_ms + <本周期长度>`：
+    ///
+    /// - **普通任务**：`<本周期长度>` = `interval_duration`（Cron 为 0，由 `schedule.after()`
+    ///   自己推进一拍）。
+    /// - **高频任务**：`<本周期长度>` = `high_freq_assign_interval`。
+    ///
+    /// `assign_lead_ms` 必须补上：`calc_next_assign` 末尾会统一减一次
+    /// （`next_assign_ms = next_exec_ms - assign_lead_ms`）。不补的话 `next_assign_ms`
+    /// 的增量会比本周期长度少一个 lead，执行时刻的间距也跟着少一个 lead。
+    ///
+    /// 于是两个不变量成立：
+    /// - `next_assign_ms` 每次增量 = 本周期长度；
+    /// - 相邻 `scheduled_exec_start_ms` 的间距 = 本周期长度，且高频任务的
+    ///   `exec_deadline_ms`（= 本段 scheduled + hf_interval）正好等于下一段的 scheduled，
+    ///   段与段首尾相接、不重叠。
     ///
     /// ## 参数
     ///
@@ -376,13 +454,21 @@ impl JobxJobSvc {
                     assign_lead_duration: assign_lead_duration_default,
                     ..
                 } = *get_jobx_scheduler_config()?;
+
+                // 两个分支都要先补回 `assign_lead_ms`：`calc_next_assign` 末尾会把它减掉，
+                // 不补就等于让 `next_assign_ms` 的增量少了 lead，执行时刻的间距也跟着少一个 lead。
+                let lead_ms = existing
+                    .assign_lead_ms
+                    .map(|v| v.value() as u64)
+                    .unwrap_or(assign_lead_duration_default.as_millis() as u64);
+
                 if existing.high_freq.unwrap_or(false) {
-                    next_assign_ms.value() + high_freq_assign_interval.as_millis() as u64
+                    // 高频任务：本段执行时段长度就是 `high_freq_assign_interval`，
+                    // 所以下一个预定执行时刻 = 上一个 + hf_interval。
+                    // 与 `exec_deadline_ms`（= scheduled + hf_interval）严丝合缝：
+                    // 上一段结束的时刻正是下一段开始的时刻，不重叠、不留缝。
+                    next_assign_ms.value() + lead_ms + high_freq_assign_interval.as_millis() as u64
                 } else {
-                    let lead_ms = existing
-                        .assign_lead_ms
-                        .map(|v| v.value() as u64)
-                        .unwrap_or(assign_lead_duration_default.as_millis() as u64);
                     let interval_duration_ms = existing
                         .interval_duration
                         .as_ref()
@@ -457,6 +543,75 @@ impl JobxJobSvc {
         JobxTaskSvc::add(task_dto, Some(db.as_ref())).await
     }
 
+    /// # 兜底：把「逻辑时间轴已经跑偏」的计划拉回当前时间
+    ///
+    /// 把所有 `next_assign_ms < now - max_lag_ms` 的启用计划（Manual 除外）的
+    /// `next_assign_ms` 直接改成 `now`，返回受影响的行数。
+    ///
+    /// ## 为什么需要它
+    ///
+    /// `next_assign_ms` 的推进是**开环**的：起点取旧的 `next_assign_ms` 而不是 `now`
+    /// （这样周期不漂移、漏拍可补，见 [`Self::recalc_next_assign_ms`]）。代价是滞后量
+    /// 不会自愈，而 `scan_and_publish` 的查询窗口有下界
+    /// `now - query_start_earlier_duration`（默认 3 天）：
+    ///
+    /// - 滞后 < 3 天：还在窗口内，只是每轮扫描只能补一拍，追赶速率被 `scan_interval` 卡住；
+    /// - 滞后 > 3 天：`next_assign_ms` 落到窗口外，**永远不会再被选中**——静默停摆，
+    ///   日志里一条记录都没有。这是比「执行时刻失真」严重得多的故障。
+    ///
+    /// 本方法把「静默停摆」变成「拉回当前时间 + 告警」。
+    ///
+    /// ## 语义：丢弃错过的拍子
+    ///
+    /// 拉回后 `next_assign_ms = now`，本轮扫描就会命中它，立刻分派一次。
+    /// 中间错过的拍子**不补**——补也补不回来（`jobx_task` 里没有对应记录，
+    /// 补出来的一串任务执行时刻全在过去，会背靠背地突发执行）。
+    ///
+    /// Cron 计划会被拉到一个不在 cron 点上的时刻，因此会多跑一次「非整点」的执行；
+    /// `take` 里的 `recalc_next_assign_ms` 随后会用 `schedule.after()` 重新对齐到
+    /// 真正的 cron 拍点，只影响这一次。
+    ///
+    /// ## 参数
+    ///
+    /// * `now` - 当前时间戳（毫秒），由调用方传入以便一次扫描内共用同一基准
+    /// * `max_lag_ms` - 允许的最大滞后（毫秒），`JobxSchedulerConfig::max_assign_lag_duration`
+    /// * `db` - 数据库连接
+    #[log_call]
+    pub async fn revive_stale_jobs<C>(
+        now: i64,
+        max_lag_ms: i64,
+        #[skip_log] db: &C,
+    ) -> Result<u64, SvcError>
+    where
+        C: ConnectionTrait,
+    {
+        let threshold = now - max_lag_ms;
+        let rows_affected = jobx_job::Entity::update_many()
+            .col_expr(jobx_job::Column::NextAssignMs, Expr::value(now))
+            .col_expr(
+                jobx_job::Column::UpdaterId,
+                Expr::value(SYS_OPERATOR_USER_ID as i64),
+            )
+            .col_expr(jobx_job::Column::UpdateMs, Expr::value(now))
+            .filter(jobx_job::Column::Enabled.eq(true))
+            .filter(jobx_job::Column::JobType.ne(JobType::Manual.value()))
+            // next_assign_ms 为 NULL 时比较结果是 NULL（不成立），自动被排除
+            .filter(jobx_job::Column::NextAssignMs.lt(threshold))
+            .exec(db)
+            .await
+            .map_err(|e| anyhow!("拉回滞后计划失败: {e}"))?
+            .rows_affected;
+
+        if rows_affected > 0 {
+            warn!(
+                "有 {rows_affected} 个计划的 next_assign_ms 滞后超过 {}ms（now={now}），已拉回当前时间",
+                max_lag_ms
+            );
+        }
+
+        Ok(rows_affected)
+    }
+
     /// # 扫描可发布任务并推送到 Redis Stream
     ///
     /// 查询当前时间窗口内 `next_assign_ms` 到期的任务，序列化为 JSON 后
@@ -512,6 +667,20 @@ impl JobxJobSvc {
         C: ConnectionTrait,
     {
         let now = now_ms() as i64;
+
+        // 先兜底：把滞后到查询窗口之外（永远发不出去）的计划拉回当前时间。
+        // 必须排在 list_publishable 之前，否则被拉回的计划要等下一轮扫描才生效。
+        // 失败不中断本轮发布——拉回是兜底手段，不该让正常调度跟着停摆。
+        if let Err(e) = Self::revive_stale_jobs(
+            now,
+            config.max_assign_lag_duration.as_millis() as i64,
+            db,
+        )
+        .await
+        {
+            warn!("拉回滞后计划失败，本轮仍按原时间窗口扫描: {e:?}");
+        }
+
         let begin = now - config.query_start_earlier_duration.as_millis() as i64;
         let end = now + config.query_end_later_duration.as_millis() as i64;
 
@@ -591,5 +760,530 @@ impl JobxJobSvc {
         }
 
         Ok(())
+    }
+}
+
+/// # 调度计算与兜底逻辑的测试
+///
+/// 纯逻辑测试（`calc_next_assign` / `schedule_changed`）不依赖数据库，`cargo test` 直接跑。
+///
+/// 数据库相关测试需要真实 PostgreSQL，通过环境变量 `JOBX_TEST_DB_URL` 指定连接串，
+/// 例如：
+///
+/// ```text
+/// JOBX_TEST_DB_URL=postgres://postgres:postgres@127.0.0.1:5432/jobx_test cargo test -p jobx-svr
+/// ```
+///
+/// 未设置该变量时这些测试打印一行 skip 提示后直接返回，不会失败——避免在没库的环境里
+/// 把整个测试套件染红。**它们会在库上 `drop table jobx_job` 重建**，所以务必指向一个
+/// 一次性测试库，不要指开发库。
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::set_jobx_scheduler_config;
+    use serde_json::json;
+    use std::sync::Mutex;
+
+    /// 数据库测试串行执行：它们共用同一张 `jobx_job`，并发跑会互相清表。
+    static DB_LOCK: Mutex<()> = Mutex::new(());
+
+    /// 建表语句与 `model/create-table-pgsql.sql` 的 `jobx_job` 保持一致
+    /// （VO 会 select 全部列，少一列就查不出来）。
+    const CREATE_JOBX_JOB: &str = r#"
+create table jobx_job (
+   id                   INT8                 not null,
+   name                 VARCHAR(50)          not null,
+   params               VARCHAR(800)         null,
+   job_type             INT2                 not null,
+   high_freq            BOOL                 null default false,
+   cron                 VARCHAR(30)          null,
+   interval_duration    VARCHAR(10)          null,
+   valid_begin_ms       INT8                 null,
+   valid_end_ms         INT8                 null,
+   executor_code        VARCHAR(50)          not null,
+   assign_lead_ms       INT4                 null,
+   next_assign_ms       INT8                 null,
+   stream_max_len       INT4                 null,
+   remark               VARCHAR(50)          null,
+   enabled              BOOL                 not null default true,
+   creater_id           INT8                 not null,
+   create_ms            INT8                 not null,
+   updater_id           INT8                 not null,
+   update_ms            INT8                 not null,
+   constraint PK_JOBX_JOB primary key (id),
+   constraint AK_NAME_JOBX_JOB unique (name)
+)"#;
+
+    fn init_scheduler_config() {
+        set_jobx_scheduler_config(JobxSchedulerConfig::default());
+    }
+    fn lead_default() -> u64 {
+        JobxSchedulerConfig::default().assign_lead_duration.as_millis() as u64
+    }
+
+    // ================= 纯逻辑：calc_next_assign =================
+
+    /// 固定间隔：`next_assign = after_ms - assign_lead_ms`
+    #[test]
+    fn fixed_interval_subtracts_lead() {
+        init_scheduler_config();
+        let (next, high_freq) = JobxJobSvc::calc_next_assign(
+            JobType::FixedDelay,
+            None,
+            Some(api::Duration::from_millis(300_000)),
+            None,
+            None,
+            Some(U64::from(60_000u64)),
+            1_000_000,
+        )
+        .unwrap();
+
+        assert_eq!(next, Some(940_000));
+        assert!(!high_freq);
+    }
+
+    /// 起点小于提前量时饱和到 0，而不是 u64 下溢
+    #[test]
+    fn fixed_interval_underflow_saturates() {
+        init_scheduler_config();
+        let (next, _) = JobxJobSvc::calc_next_assign(
+            JobType::FixedRate,
+            None,
+            Some(api::Duration::from_millis(300_000)),
+            None,
+            None,
+            Some(U64::from(60_000u64)),
+            30_000,
+        )
+        .unwrap();
+
+        assert_eq!(next, Some(0));
+    }
+
+    /// 有效开始时间晚于起点时，以有效开始时间为准
+    #[test]
+    fn valid_begin_clamps_start() {
+        init_scheduler_config();
+        let (next, _) = JobxJobSvc::calc_next_assign(
+            JobType::FixedDelay,
+            None,
+            Some(api::Duration::from_millis(300_000)),
+            Some(U64::from(2_000_000u64)),
+            None,
+            Some(U64::from(60_000u64)),
+            1_000_000,
+        )
+        .unwrap();
+
+        assert_eq!(next, Some(1_940_000));
+    }
+
+    /// 下次执行时刻超过有效结束时间 → 报错（计划已到期）
+    #[test]
+    fn valid_end_exceeded_errors() {
+        init_scheduler_config();
+        let result = JobxJobSvc::calc_next_assign(
+            JobType::FixedDelay,
+            None,
+            Some(api::Duration::from_millis(300_000)),
+            None,
+            Some(U64::from(500_000u64)),
+            Some(U64::from(60_000u64)),
+            1_000_000,
+        );
+
+        assert!(result.is_err(), "超过有效结束时间应当报错");
+    }
+
+    /// Cron：落在真正的 cron 拍点上，且 `next_assign + lead` 是 5 分钟的整数倍
+    #[test]
+    fn cron_picks_next_beat() {
+        init_scheduler_config();
+        let lead = lead_default();
+        let base = Utc
+            .with_ymd_and_hms(2026, 1, 1, 0, 0, 0)
+            .unwrap()
+            .timestamp_millis() as u64;
+        let after = base + 1_000;
+
+        let (next, _) = JobxJobSvc::calc_next_assign(
+            JobType::Cron,
+            Some("0 */5 * * * *".to_string()),
+            None,
+            None,
+            None,
+            Some(U64::from(lead)),
+            after,
+        )
+        .unwrap();
+
+        let next = next.expect("cron 应当有下一次");
+        let exec_ms = next + lead;
+        assert_eq!(
+            exec_ms % 300_000,
+            0,
+            "执行时刻必须落在 5 分钟边界上，实际 {exec_ms}"
+        );
+        assert_eq!(exec_ms, base + 300_000, "应当是 base 之后的第一个整 5 分钟");
+    }
+
+    /// 间隔小于阈值 → 高频任务
+    #[test]
+    fn high_freq_detected_by_interval() {
+        init_scheduler_config();
+        let (_, high_freq) = JobxJobSvc::calc_next_assign(
+            JobType::FixedDelay,
+            None,
+            Some(api::Duration::from_millis(30_000)),
+            None,
+            None,
+            Some(U64::from(60_000u64)),
+            1_000_000,
+        )
+        .unwrap();
+
+        assert!(high_freq, "30s 间隔应判定为高频任务");
+    }
+
+    // ================= 数据库相关 =================
+
+    async fn connect_test_db() -> Option<sea_orm::DatabaseConnection> {
+        let Ok(url) = std::env::var("JOBX_TEST_DB_URL") else {
+            eprintln!("跳过数据库测试：未设置 JOBX_TEST_DB_URL");
+            return None;
+        };
+        Some(
+            sea_orm::Database::connect(&url)
+                .await
+                .expect("连接测试库失败，请检查 JOBX_TEST_DB_URL"),
+        )
+    }
+
+    async fn reset_table(db: &sea_orm::DatabaseConnection) {
+        db.execute_unprepared("drop table if exists jobx_task")
+            .await
+            .expect("drop jobx_task 失败");
+        db.execute_unprepared("drop table if exists jobx_job")
+            .await
+            .expect("drop table 失败");
+        db.execute_unprepared(CREATE_JOBX_JOB)
+            .await
+            .expect("create table 失败");
+        // list_publishable 的去重子查询只用到这三列，测试里给最小定义即可
+        db.execute_unprepared(
+            "create table jobx_task (id INT8 not null primary key, job_id INT8 null, \
+             scheduled_exec_start_ms INT8 null)",
+        )
+        .await
+        .expect("create jobx_task 失败");
+    }
+
+    /// 插入一条计划。参数按需要覆盖的列给，其余走建表默认值。
+    #[allow(clippy::too_many_arguments)]
+    async fn insert_job(
+        db: &sea_orm::DatabaseConnection,
+        id: i64,
+        name: &str,
+        job_type: i16,
+        high_freq: bool,
+        cron: Option<&str>,
+        interval_duration: Option<&str>,
+        assign_lead_ms: Option<i32>,
+        next_assign_ms: Option<i64>,
+        enabled: bool,
+    ) {
+        let sql = format!(
+            "insert into jobx_job (id, name, job_type, high_freq, cron, interval_duration, \
+             assign_lead_ms, next_assign_ms, executor_code, enabled, creater_id, create_ms, \
+             updater_id, update_ms) values ({id}, '{name}', {job_type}, {high_freq}, {}, {}, {}, {}, \
+             'test-executor', {enabled}, 0, 0, 0, 0)",
+            cron.map(|v| format!("'{v}'")).unwrap_or("null".to_string()),
+            interval_duration
+                .map(|v| format!("'{v}'"))
+                .unwrap_or("null".to_string()),
+            assign_lead_ms
+                .map(|v| v.to_string())
+                .unwrap_or("null".to_string()),
+            next_assign_ms
+                .map(|v| v.to_string())
+                .unwrap_or("null".to_string()),
+        );
+        db.execute_unprepared(&sql).await.expect("insert 失败");
+    }
+
+    async fn load_job(db: &sea_orm::DatabaseConnection, id: u64) -> JobxJobVo {
+        JobxJobDao::get_by_id::<_, JobxJobVo>(U64::from(id), db)
+            .await
+            .expect("查询失败")
+            .expect("记录不存在")
+    }
+
+    /// 只拉回「启用 + 非 Manual + 滞后超阈值」的计划
+    #[tokio::test]
+    async fn revive_stale_jobs_only_touches_stale() {
+        let _guard = DB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        init_scheduler_config();
+        let Some(db) = connect_test_db().await else {
+            return;
+        };
+        reset_table(&db).await;
+
+        let now = now_ms() as i64;
+        let lag_ms = 3_600_000i64;
+        // 1: 滞后 2 小时 → 应被拉回
+        insert_job(&db, 1, "stale", 2, false, None, Some("5min"), Some(60_000), Some(now - 7_200_000), true).await;
+        // 2: 滞后 10 分钟 → 不动
+        insert_job(&db, 2, "fresh", 2, false, None, Some("5min"), Some(60_000), Some(now - 600_000), true).await;
+        // 3: 滞后 2 小时但已停用 → 不动
+        insert_job(&db, 3, "disabled", 2, false, None, Some("5min"), Some(60_000), Some(now - 7_200_000), false).await;
+        // 4: 滞后 2 小时但 Manual → 不动
+        insert_job(&db, 4, "manual", 0, false, None, None, None, Some(now - 7_200_000), true).await;
+        // 5: next_assign_ms 为 NULL → 不动
+        insert_job(&db, 5, "null-next", 2, false, None, Some("5min"), Some(60_000), None, true).await;
+
+        let affected = JobxJobSvc::revive_stale_jobs(now, lag_ms, &db)
+            .await
+            .expect("拉回失败");
+
+        assert_eq!(affected, 1, "只有 stale 这一条应当被拉回");
+        assert_eq!(load_job(&db, 1).await.next_assign_ms.map(|v| v.value()), Some(now as u64));
+        assert_eq!(
+            load_job(&db, 2).await.next_assign_ms.map(|v| v.value()),
+            Some((now - 600_000) as u64)
+        );
+        assert_eq!(
+            load_job(&db, 3).await.next_assign_ms.map(|v| v.value()),
+            Some((now - 7_200_000) as u64)
+        );
+        assert_eq!(
+            load_job(&db, 4).await.next_assign_ms.map(|v| v.value()),
+            Some((now - 7_200_000) as u64)
+        );
+        assert!(load_job(&db, 5).await.next_assign_ms.is_none());
+
+        // 幂等：再跑一次不该再命中任何行
+        let again = JobxJobSvc::revive_stale_jobs(now, lag_ms, &db)
+            .await
+            .expect("第二次拉回失败");
+        assert_eq!(again, 0);
+    }
+
+    /// 非高频任务推进：`next_assign += interval`
+    #[tokio::test]
+    async fn recalc_advances_by_interval() {
+        let _guard = DB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        init_scheduler_config();
+        let Some(db) = connect_test_db().await else {
+            return;
+        };
+        reset_table(&db).await;
+
+        let start = 1_800_000_000_000i64;
+        insert_job(&db, 1, "fixed", 2, false, None, Some("5min"), Some(60_000), Some(start), true).await;
+
+        JobxJobSvc::recalc_next_assign_ms(U64::from(1u64), Some(&db))
+            .await
+            .expect("推进失败");
+
+        let job = load_job(&db, 1).await;
+        assert_eq!(
+            job.next_assign_ms.map(|v| v.value()),
+            Some((start + 300_000) as u64),
+            "非高频任务每次推进一个 interval"
+        );
+    }
+
+    /// 高频任务推进：`next_assign += high_freq_assign_interval`，
+    /// 于是相邻「预定执行时刻」的间距严格等于 `high_freq_assign_interval`，
+    /// 也正好等于上一段 `exec_deadline_ms` 的位置（段与段首尾相接）
+    #[tokio::test]
+    async fn recalc_advances_high_freq_by_assign_interval() {
+        let _guard = DB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        init_scheduler_config();
+        let Some(db) = connect_test_db().await else {
+            return;
+        };
+        reset_table(&db).await;
+
+        let start = 1_800_000_000_000i64;
+        let lead = 60_000i64;
+        let hf_interval = JobxSchedulerConfig::default()
+            .high_freq_assign_interval
+            .as_millis() as i64;
+        insert_job(&db, 1, "hf", 2, true, None, Some("5min"), Some(lead as i32), Some(start), true).await;
+
+        JobxJobSvc::recalc_next_assign_ms(U64::from(1u64), Some(&db))
+            .await
+            .expect("推进失败");
+
+        let job = load_job(&db, 1).await;
+        let next = job.next_assign_ms.map(|v| v.value()).unwrap() as i64;
+        assert_eq!(
+            next,
+            start + hf_interval,
+            "高频任务的 next_assign 增量应等于 high_freq_assign_interval"
+        );
+        // 真正有物理意义的是执行时刻：间距应当严格等于 hf_interval，
+        // 也正好是上一段 exec_deadline_ms 的位置（scheduled + hf_interval）
+        assert_eq!((next + lead) - (start + lead), hf_interval);
+    }
+
+    /// Cron 任务推进后仍落在 cron 拍点上
+    #[tokio::test]
+    async fn recalc_cron_stays_on_beat() {
+        let _guard = DB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        init_scheduler_config();
+        let Some(db) = connect_test_db().await else {
+            return;
+        };
+        reset_table(&db).await;
+
+        let lead = 60_000i64;
+        let start = Utc
+            .with_ymd_and_hms(2026, 1, 1, 0, 0, 0)
+            .unwrap()
+            .timestamp_millis()
+            - lead;
+        insert_job(&db, 1, "cron", 1, false, Some("0 */5 * * * *"), None, Some(lead as i32), Some(start), true).await;
+
+        JobxJobSvc::recalc_next_assign_ms(U64::from(1u64), Some(&db))
+            .await
+            .expect("推进失败");
+
+        let job = load_job(&db, 1).await;
+        let next = job.next_assign_ms.map(|v| v.value()).unwrap() as i64;
+        assert!(next > start, "cron 应当向前推进");
+        assert_eq!((next + lead) % 300_000, 0, "推进后仍应落在 5 分钟边界");
+    }
+
+    /// 只改备注：不重算 `next_assign_ms`（不产生调度副作用）
+    #[tokio::test]
+    async fn before_modify_skips_recompute_when_schedule_unchanged() {
+        let _guard = DB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        init_scheduler_config();
+        let Some(db) = connect_test_db().await else {
+            return;
+        };
+        reset_table(&db).await;
+
+        let next_assign = 1_800_000_000_000i64;
+        insert_job(&db, 1, "job", 2, false, None, Some("5min"), Some(60_000), Some(next_assign), true).await;
+
+        let dto: JobxJobModifyDto =
+            serde_json::from_value(json!({"id": "1", "remark": "只改备注"})).unwrap();
+        let out = JobxJobSvc::before_modify(dto, &db).await.expect("钩子失败");
+
+        assert!(
+            out.next_assign_ms.is_none(),
+            "调度参数没变时不应写 next_assign_ms（None = 不更新该列）"
+        );
+        assert!(out.high_freq.is_none());
+    }
+
+    /// 改了间隔：重算 `next_assign_ms`
+    #[tokio::test]
+    async fn before_modify_recomputes_when_interval_changed() {
+        let _guard = DB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        init_scheduler_config();
+        let Some(db) = connect_test_db().await else {
+            return;
+        };
+        reset_table(&db).await;
+
+        insert_job(&db, 1, "job", 2, false, None, Some("5min"), Some(60_000), Some(1_800_000_000_000), true).await;
+
+        // Duration 序列化为毫秒数
+        let dto: JobxJobModifyDto =
+            serde_json::from_value(json!({"id": "1", "intervalDuration": 600_000})).unwrap();
+        let out = JobxJobSvc::before_modify(dto, &db).await.expect("钩子失败");
+
+        let recomputed = out
+            .next_assign_ms
+            .expect("调度参数变了必须重算")
+            .expect("非 Manual 计划必须有 next_assign_ms");
+        // 重算基准是 now，因此应当落在当前时间附近而不是旧值上
+        let now = now_ms();
+        assert!(
+            recomputed.value() > now.saturating_sub(3_600_000),
+            "重算应把 next_assign_ms 拉回当前时间附近，实际 {}",
+            recomputed.value()
+        );
+    }
+
+    /// 切到 Manual：清空调度派生字段
+    #[tokio::test]
+    async fn before_modify_clears_when_switching_to_manual() {
+        let _guard = DB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        init_scheduler_config();
+        let Some(db) = connect_test_db().await else {
+            return;
+        };
+        reset_table(&db).await;
+
+        insert_job(&db, 1, "job", 2, false, None, Some("5min"), Some(60_000), Some(1_800_000_000_000), true).await;
+
+        let dto: JobxJobModifyDto =
+            serde_json::from_value(json!({"id": "1", "jobType": 0})).unwrap();
+        let out = JobxJobSvc::before_modify(dto, &db).await.expect("钩子失败");
+
+        assert_eq!(out.next_assign_ms, Some(None), "Manual 计划必须清空 next_assign_ms");
+        assert_eq!(out.high_freq, Some(None), "Manual 计划必须清空 high_freq");
+        assert_eq!(out.assign_lead_ms, Some(None), "Manual 计划必须清空 assign_lead_ms");
+    }
+
+    /// 端到端：滞后到查询窗口之外的「停摆」计划，被拉回后重新可发布
+    ///
+    /// 这条断言直接覆盖风险本身：`next_assign_ms` 掉出
+    /// `[now - query_start_earlier, now + query_end_later]` 之后，
+    /// `list_publishable` 就再也选不到它——**没有任何日志**。
+    #[tokio::test]
+    async fn revive_makes_stale_job_publishable_again() {
+        let _guard = DB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        init_scheduler_config();
+        let Some(db) = connect_test_db().await else {
+            return;
+        };
+        reset_table(&db).await;
+
+        let cfg = JobxSchedulerConfig::default();
+        let now = now_ms() as i64;
+        let begin = now - cfg.query_start_earlier_duration.as_millis() as i64;
+        let end = now + cfg.query_end_later_duration.as_millis() as i64;
+
+        // 滞后 5 天，已经掉到查询窗口下界（now - 3 天）之外
+        let five_days_ms = 5 * 24 * 3_600_000i64;
+        insert_job(
+            &db,
+            1,
+            "stalled",
+            2,
+            false,
+            None,
+            Some("5min"),
+            Some(60_000),
+            Some(now - five_days_ms),
+            true,
+        )
+        .await;
+
+        let before = JobxJobDao::list_publishable(begin, end, now, &db)
+            .await
+            .expect("查询失败");
+        assert!(
+            before.is_empty(),
+            "滞后 5 天的计划不应出现在可发布列表里——这正是静默停摆"
+        );
+
+        let affected =
+            JobxJobSvc::revive_stale_jobs(now, cfg.max_assign_lag_duration.as_millis() as i64, &db)
+                .await
+                .expect("拉回失败");
+        assert_eq!(affected, 1);
+
+        let after = JobxJobDao::list_publishable(begin, end, now, &db)
+            .await
+            .expect("查询失败");
+        assert_eq!(after.len(), 1, "拉回后应当重新进入可发布列表");
+        assert_eq!(after[0].id, U64::from(1u64));
     }
 }
