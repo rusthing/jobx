@@ -21,6 +21,7 @@ create table jobx_job (
    assign_lead_ms       INT4                 null,
    next_assign_ms       INT8                 null,
    stream_max_len       INT4                 null,
+   task_expire_duration VARCHAR(30)          null,
    remark               VARCHAR(50)          null,
    enabled              BOOL                 not null default true,
    creater_id           INT8                 not null,
@@ -38,17 +39,20 @@ comment on column jobx_job.id is
 'ID';
 
 comment on column jobx_job.name is
-'名称';
+'名称
+@len 1..=50';
 
 comment on column jobx_job.params is
-'参数';
+'参数
+@len 0..=800';
 
 comment on column jobx_job.job_type is
 '计划类型
-0: 手动分派
-1: cron表达式
-2: 固定延迟
-3: 固定频率';
+@enum JobType default=Manual
+  0=Manual      手动分派
+  1=Cron        cron 表达式
+  2=FixedDelay  固定延迟
+  3=FixedRate   固定频率';
 
 comment on column jobx_job.high_freq is
 '是否高频任务
@@ -56,7 +60,8 @@ comment on column jobx_job.high_freq is
 
 comment on column jobx_job.cron is
 'cron表达式
-当 job_type 为 cron表达式时必填';
+当 job_type 为 cron表达式时必填
+@len 0..=30';
 
 comment on column jobx_job.interval_duration is
 '固定间隔时间
@@ -70,7 +75,8 @@ comment on column jobx_job.valid_end_ms is
 
 comment on column jobx_job.executor_code is
 '执行器编码
-发布任务消息时的key将以此编码结尾，只有相同编码的执行器才订阅此key';
+发布任务消息时的key将以此编码结尾，只有相同编码的执行器才订阅此key
+@len 1..=50';
 
 comment on column jobx_job.assign_lead_ms is
 '分派提前毫秒数';
@@ -82,8 +88,15 @@ comment on column jobx_job.stream_max_len is
 '发布该计划的消息时使用的 Stream 长度上限（MAXLEN ~ N）
 为空时采用配置文件中 jobx.scheduler.stream-max-len 的默认值';
 
+comment on column jobx_job.task_expire_duration is
+'任务保留时长
+该计划产生的任务记录超过这个时长后会被服务端自动清理
+基准是任务的创建时刻（create_ms），与任务是否执行完无关
+为空表示永久保留，不参与清理';
+
 comment on column jobx_job.remark is
-'备注';
+'备注
+@len 0..=50';
 
 comment on column jobx_job.enabled is
 '启用';
@@ -129,13 +142,14 @@ create table jobx_task (
    interval_duration    VARCHAR(10)          null,
    valid_begin_ms       INT8                 null,
    valid_end_ms         INT8                 null,
+   exec_deadline_ms     INT8                 null,
    assign_lead_ms       INT4                 null,
    creater_id           INT8                 not null,
    create_ms            INT8                 not null,
    updater_id           INT8                 not null,
    update_ms            INT8                 not null,
    constraint PK_JOBX_TASK primary key (id),
-   constraint AK_JOB_ID_AND_SCHEDULED_EXEC_STAR_JOBX_TASK unique (job_id, scheduled_exec_start_ms)
+   constraint AK_JOB_ID_AND_SCHEDULED_EXEC_START_MS_JOBX_TASK unique (job_id, scheduled_exec_start_ms)
 );
 
 comment on table jobx_task is
@@ -146,18 +160,19 @@ comment on column jobx_task.id is
 
 comment on column jobx_task.task_type is
 '任务类型
-1: 立即执行
-2: 计划执行';
+@enum TaskType default=Immediate
+  1=Immediate  立即执行
+  2=Scheduled  计划执行';
 
 comment on column jobx_task.job_id is
 '任务计划ID';
 
 comment on column jobx_task.status is
 '任务状态
-0: 运行中
-1: 成功
-2: 失败
-';
+@enum TaskStatus default=Running
+  0=Running  运行中
+  1=Success  成功
+  2=Failed   失败';
 
 comment on column jobx_task.assign_ms is
 '分派时间戳';
@@ -166,7 +181,8 @@ comment on column jobx_task.scheduled_exec_start_ms is
 '预定开始执行时间戳';
 
 comment on column jobx_task.exec_detail is
-'执行详情';
+'执行详情
+@len 0..=800';
 
 comment on column jobx_task.exec_start_ms is
 '开始执行时间戳';
@@ -175,26 +191,31 @@ comment on column jobx_task.exec_end_ms is
 '结束执行时间戳';
 
 comment on column jobx_task.executor_code is
-'执行器编码';
+'执行器编码
+@len 1..=50';
 
 comment on column jobx_task.executor_instance is
-'执行器实例';
+'执行器实例
+@len 0..=100';
 
 comment on column jobx_task.exec_params is
-'执行参数';
+'执行参数
+@len 0..=800';
 
 comment on column jobx_task.job_type is
 '计划类型
-0: 手动分派
-1: cron表达式
-2: 固定延迟
-3: 固定频率';
+@enum JobType default=Manual
+  0=Manual      手动分派
+  1=Cron        cron 表达式
+  2=FixedDelay  固定延迟
+  3=FixedRate   固定频率';
 
 comment on column jobx_task.high_freq is
 '是否高频任务';
 
 comment on column jobx_task.cron is
-'cron表达式';
+'cron表达式
+@len 0..=30';
 
 comment on column jobx_task.interval_duration is
 '固定间隔时间';
@@ -204,6 +225,10 @@ comment on column jobx_task.valid_begin_ms is
 
 comment on column jobx_task.valid_end_ms is
 '有效结束时间戳';
+
+comment on column jobx_task.exec_deadline_ms is
+'执行截止时间戳
+高频任务本次分派的执行时段终点（min(计划有效结束时间, 预定开始执行时间 + 高频分派间隔)）；为空表示不限，仅对高频任务有意义';
 
 comment on column jobx_task.assign_lead_ms is
 '分派提前毫秒数';
