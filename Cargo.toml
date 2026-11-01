@@ -42,7 +42,8 @@ jobx-api = { version = "1.0.0", path = "./jobx-api" }
 jobx-api-client = { version = "1.0.0", path = "./jobx-api-client" }
 
 [patch.crates-io]
-#idworker = { path = "../idworker" }
+# 本地 idworker（1.5.0 尚未发布）：worker node 默认位宽 4 → 6 在这里生效
+idworker = { path = "../idworker" }
 wheel-rs = { path = "../wheel-rs" }
 robotech = { path = "../robotech-rs/robotech" }
 robotech-macros = { path = "../robotech-rs/robotech-macros" }
