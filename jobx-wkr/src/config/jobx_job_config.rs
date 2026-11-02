@@ -24,9 +24,16 @@ use wheel_rs::serde::duration_option_serde;
 ///   `Default` 实现变化或换成别的字段类型，计划就会以一个「随机」的用户ID落库。
 ///
 /// 若将来要换成真实的管理员账号，只改这一行即可。
+///
+/// ## 为什么不暴露 `group_id`
+///
+/// 分组是给人看的归类维度（列表怎么摆、谁负责哪批计划），由后台维护；执行器在配置里
+/// 声明一批计划时并不知道（也不该关心）它们归到哪个组。因此 `group_id` 走 ghost 恒为
+/// `None`，注册出来的计划初始是「未分组」，要归类时在后台改。
 #[derive(o2o::o2o, Debug, Clone, Serialize, Deserialize, Setters, TypedBuilder)]
 #[owned_into(jobx_api::dto::JobxJobAddDto)]
 #[ghosts(
+    group_id: Default::default(),
     high_freq: Default::default(),
     valid_begin_ms: Default::default(),
     valid_end_ms: Default::default(),

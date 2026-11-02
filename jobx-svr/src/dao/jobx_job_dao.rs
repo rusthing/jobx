@@ -7,7 +7,13 @@ use sea_orm::ColumnTrait;
 use sea_orm::ExprTrait;
 
 /// 任务计划
+///
+/// ## 外键
+/// - `group_id` → `jobx_group.id`：分组只是归类维度，组里还有计划时不允许删组
 #[dao(
+    foreign_keys: [
+        ("group_id", "jobx_group", "任务分组"),
+    ],
     unique_keys: [
         ("name", "名称"),
     ],

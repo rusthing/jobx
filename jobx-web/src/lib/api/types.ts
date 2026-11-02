@@ -35,10 +35,23 @@ export const TASK_TYPE = {
 
 export type TaskType = (typeof TASK_TYPE)[keyof typeof TASK_TYPE];
 
+/** 任务分组：只是列表归类维度，不参与调度计算 */
+export interface Group {
+  id: Id;
+  name: string;
+  remark: string | null;
+  createrId: string;
+  createMs: string;
+  updaterId: string;
+  updateMs: string;
+}
+
 export interface Job {
   id: Id;
   executorCode: string;
   name: string;
+  /** 所属分组，null = 未分组 */
+  groupId: Id | null;
   params: string | null;
   jobType: JobType;
   /** 由调度器按高频阈值算出来的派生标记，不可手改 */
@@ -106,6 +119,8 @@ export interface JobInput {
   id?: Id;
   executorCode: string;
   name: string;
+  /** 所属分组，null = 未分组；修改时省略表示不动 */
+  groupId?: Id | null;
   params?: string | null;
   jobType: JobType;
   cron?: string | null;
@@ -125,7 +140,29 @@ export interface JobQuery {
   jobType?: JobType;
   enabled?: boolean;
   executorCode?: string;
+  /**
+   * 按分组过滤。
+   *
+   * 只支持「某个具体分组」：后端把空值当作「不过滤」，而 `IS NULL`（未分组）
+   * 这种条件没法用查询串表达（嵌套 Option 在 urlencoded 里退化成同一个空串），
+   * 所以下拉里不提供「未分组」选项。
+   */
+  groupId?: Id;
   highFreq?: boolean;
+  orderBy?: string;
+  page?: number;
+  size?: number;
+}
+
+/** 新增/修改分组的请求体（`JobxGroupAddDto` / `JobxGroupModifyDto`） */
+export interface GroupInput {
+  id?: Id;
+  name: string;
+  remark?: string | null;
+}
+
+export interface GroupQuery {
+  keyword?: string;
   orderBy?: string;
   page?: number;
   size?: number;

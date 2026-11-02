@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { Activity, Boxes, CalendarClock, LayoutDashboard, Radio, Settings2 } from "lucide-react";
+import { Activity, Boxes, CalendarClock, FolderOpen, LayoutDashboard, Radio, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { endpointLabel, getDataMode, setDataMode, subscribeDataMode, type DataMode } from "@/lib/api";
 import { useEffect, useState } from "react";
@@ -10,6 +10,7 @@ import { Wordmark } from "./Logo";
 const NAV = [
   { to: "/", label: "调度总览", icon: LayoutDashboard, end: true },
   { to: "/jobs", label: "任务计划", icon: CalendarClock },
+  { to: "/groups", label: "计划分组", icon: FolderOpen },
   { to: "/tasks", label: "执行记录", icon: Activity },
   { to: "/executors", label: "执行器", icon: Boxes },
 ] as const;

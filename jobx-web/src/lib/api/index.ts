@@ -8,9 +8,19 @@
  */
 
 import { API_BASE } from "./http";
-import { liveJobs, liveTasks } from "./live";
-import { mockJobs, mockTasks } from "./mock";
-import type { Job, JobInput, JobQuery, Page, Task, TaskQuery } from "./types";
+import { liveGroups, liveJobs, liveTasks } from "./live";
+import { mockGroups, mockJobs, mockTasks } from "./mock";
+import type {
+  Group,
+  GroupInput,
+  GroupQuery,
+  Job,
+  JobInput,
+  JobQuery,
+  Page,
+  Task,
+  TaskQuery,
+} from "./types";
 
 export type DataMode = "mock" | "live";
 
@@ -75,6 +85,20 @@ export const tasks = {
     isMock() ? mockTasks.list(query) : liveTasks.list(query),
   get: (id: string): Promise<Task> => (isMock() ? mockTasks.get(id) : liveTasks.get(id)),
   remove: (id: string): Promise<null> => (isMock() ? mockTasks.remove(id) : liveTasks.remove(id)),
+};
+
+export const groups = {
+  page: (query: GroupQuery = {}): Promise<Page<Group>> =>
+    isMock() ? mockGroups.page(query) : liveGroups.page(query),
+  list: (query: GroupQuery = {}): Promise<Group[]> =>
+    isMock() ? mockGroups.list(query) : liveGroups.list(query),
+  get: (id: string): Promise<Group> => (isMock() ? mockGroups.get(id) : liveGroups.get(id)),
+  create: (input: GroupInput): Promise<Group> =>
+    isMock() ? mockGroups.create(input) : liveGroups.create(input),
+  update: (input: GroupInput): Promise<Group> =>
+    isMock() ? mockGroups.update(input) : liveGroups.update(input),
+  remove: (id: string): Promise<null> =>
+    isMock() ? mockGroups.remove(id) : liveGroups.remove(id),
 };
 
 export { ApiError } from "./http";

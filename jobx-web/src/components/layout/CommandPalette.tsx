@@ -8,6 +8,7 @@ import {
   Boxes,
   CalendarClock,
   Database,
+  FolderOpen,
   LayoutDashboard,
   Plus,
   RotateCw,
@@ -47,6 +48,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       { id: "overview", label: "调度总览", hint: "总览", icon: LayoutDashboard, keywords: "overview dashboard 总览 首页", run: go("/") },
       { id: "jobs", label: "任务计划", hint: "列表", icon: CalendarClock, keywords: "jobs 计划 任务 cron", run: go("/jobs") },
       { id: "new-job", label: "新建任务计划", hint: "动作", icon: Plus, keywords: "new create 新建 创建 计划", run: go("/jobs?new=1") },
+      { id: "groups", label: "计划分组", hint: "管理", icon: FolderOpen, keywords: "group 分组 归类 目录", run: go("/groups") },
+      { id: "new-group", label: "新建分组", hint: "动作", icon: Plus, keywords: "new create 新建 创建 分组", run: go("/groups?new=1") },
       { id: "tasks", label: "执行记录", hint: "列表", icon: Activity, keywords: "tasks 执行 记录 日志", run: go("/tasks") },
       { id: "executors", label: "执行器", hint: "列表", icon: Boxes, keywords: "executor 执行器 worker", run: go("/executors") },
       {

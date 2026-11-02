@@ -793,6 +793,7 @@ mod tests {
 create table jobx_job (
    id                   INT8                 not null,
    name                 VARCHAR(50)          not null,
+   group_id             INT8                 null,
    params               VARCHAR(800)         null,
    job_type             INT2                 not null,
    high_freq            BOOL                 null default false,

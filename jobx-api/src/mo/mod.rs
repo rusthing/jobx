@@ -2,5 +2,6 @@
 
 pub mod prelude;
 
+pub mod jobx_group;
 pub mod jobx_job;
 pub mod jobx_task;

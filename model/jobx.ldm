@@ -1587,6 +1587,50 @@ LABL 0 新宋体,8,N</a:FontList>
 <o:Entity Ref="o11"/>
 </c:Object>
 </o:EntitySymbol>
+<o:EntitySymbol Id="o76">
+<a:CreationDate>1793576810</a:CreationDate>
+<a:ModificationDate>1793576810</a:ModificationDate>
+<a:IconMode>-1</a:IconMode>
+<a:Rect>((-27143,-12000),(-758,4000))</a:Rect>
+<a:LineColor>11881048</a:LineColor>
+<a:FillColor>16759472</a:FillColor>
+<a:ShadowColor>12632256</a:ShadowColor>
+<a:FontList>STRN 0 新宋体,8,N
+DISPNAME 0 新宋体,8,N
+Attributes 0 新宋体,8,N
+EntityPrimaryAttribute 0 新宋体,8,U
+EntityForeignAttribute 0 新宋体,8,N
+Identifiers 0 新宋体,8,N
+LABL 0 新宋体,8,N</a:FontList>
+<a:BrushStyle>6</a:BrushStyle>
+<a:GradientFillMode>65</a:GradientFillMode>
+<a:GradientEndColor>16777215</a:GradientEndColor>
+<c:Object>
+<o:Entity Ref="o64"/>
+</c:Object>
+</o:EntitySymbol>
+<o:RelationshipSymbol Id="o77">
+<a:CreationDate>1793576810</a:CreationDate>
+<a:ModificationDate>1793576810</a:ModificationDate>
+<a:Rect>((-14200,4000),(-13800,7625))</a:Rect>
+<a:ListOfPoints>((-14000,7625),(-14000,4000))</a:ListOfPoints>
+<a:CornerStyle>1</a:CornerStyle>
+<a:ArrowStyle>4371</a:ArrowStyle>
+<a:LineColor>11881048</a:LineColor>
+<a:ShadowColor>12632256</a:ShadowColor>
+<a:FontList>CENTER 0 新宋体,8,N
+SOURCE 0 新宋体,8,N
+DESTINATION 0 新宋体,8,N</a:FontList>
+<c:SourceSymbol>
+<o:EntitySymbol Ref="o7"/>
+</c:SourceSymbol>
+<c:DestinationSymbol>
+<o:EntitySymbol Ref="o76"/>
+</c:DestinationSymbol>
+<c:Object>
+<o:Relationship Ref="o74"/>
+</c:Object>
+</o:RelationshipSymbol>
 </c:Symbols>
 </o:LogicalDiagram>
 </c:LogicalDiagrams>
@@ -1660,6 +1704,19 @@ LABL 0 新宋体,8,N</a:FontList>
 <a:DataType>VA50</a:DataType>
 <a:Length>50</a:Length>
 <a:LogicalAttribute.Mandatory>1</a:LogicalAttribute.Mandatory>
+<a:GlobalObjectID/>
+</o:EntityAttribute>
+<o:EntityAttribute Id="o63">
+<a:ObjectID>A5E04219-0278-42BA-A383-6FDA6DABE26A</a:ObjectID>
+<a:Name>任务分组ID</a:Name>
+<a:Code>group_id</a:Code>
+<a:CreationDate>1793576810</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1793576810</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:Comment>任务分组ID
+为空表示未分组</a:Comment>
+<a:DataType>LI</a:DataType>
 <a:GlobalObjectID/>
 </o:EntityAttribute>
 <o:EntityAttribute Id="o16">
@@ -2257,6 +2314,138 @@ LABL 0 新宋体,8,N</a:FontList>
 </o:EntityAttribute>
 </c:Attributes>
 </o:Entity>
+<o:Entity Id="o64">
+<a:ObjectID>CFDCDB80-2DEC-4722-9CF3-FECD6B74281C</a:ObjectID>
+<a:Name>任务分组</a:Name>
+<a:Code>job_group</a:Code>
+<a:CreationDate>1793576810</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1793576810</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:GlobalObjectID/>
+<c:Identifiers>
+<o:Identifier Id="o65">
+<a:ObjectID>53428A1D-8BEE-4BF0-9335-952B8550347F</a:ObjectID>
+<a:Name>Identifier_1</a:Name>
+<a:Code>Identifier_1</a:Code>
+<a:CreationDate>1793576810</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1793576810</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:GlobalObjectID/>
+<c:Identifier.Attributes>
+<o:EntityAttribute Ref="o67"/>
+</c:Identifier.Attributes>
+</o:Identifier>
+<o:Identifier Id="o66">
+<a:ObjectID>F34F52A8-000B-4027-975B-60E8C88C7EF2</a:ObjectID>
+<a:Name>名称</a:Name>
+<a:Code>name</a:Code>
+<a:CreationDate>1793576810</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1793576810</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:GlobalObjectID/>
+<c:Identifier.Attributes>
+<o:EntityAttribute Ref="o68"/>
+</c:Identifier.Attributes>
+</o:Identifier>
+</c:Identifiers>
+<c:PrimaryIdentifier>
+<o:Identifier Ref="o65"/>
+</c:PrimaryIdentifier>
+<c:Attributes>
+<o:EntityAttribute Id="o67">
+<a:ObjectID>B8F34B13-60BC-4B44-B6EE-3CC3B4D47668</a:ObjectID>
+<a:Name>ID</a:Name>
+<a:Code>id</a:Code>
+<a:CreationDate>1793576810</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1793576810</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:DataType>LI</a:DataType>
+<a:LogicalAttribute.Mandatory>1</a:LogicalAttribute.Mandatory>
+<a:GlobalObjectID/>
+</o:EntityAttribute>
+<o:EntityAttribute Id="o68">
+<a:ObjectID>EA9C025F-D5BF-460E-A209-AD77AF9D2E52</a:ObjectID>
+<a:Name>名称</a:Name>
+<a:Code>name</a:Code>
+<a:CreationDate>1793576810</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1793576810</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:Comment>名称
+@len 1..=50</a:Comment>
+<a:DataType>VA50</a:DataType>
+<a:Length>50</a:Length>
+<a:LogicalAttribute.Mandatory>1</a:LogicalAttribute.Mandatory>
+<a:GlobalObjectID/>
+</o:EntityAttribute>
+<o:EntityAttribute Id="o69">
+<a:ObjectID>B479FF4E-B159-45BE-A800-20E11636649D</a:ObjectID>
+<a:Name>备注</a:Name>
+<a:Code>remark</a:Code>
+<a:CreationDate>1793576810</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1793576810</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:Comment>备注
+@len 0..=50</a:Comment>
+<a:DataType>VA50</a:DataType>
+<a:Length>50</a:Length>
+<a:GlobalObjectID/>
+</o:EntityAttribute>
+<o:EntityAttribute Id="o70">
+<a:ObjectID>7E284645-E647-41F7-A938-73FFC367A083</a:ObjectID>
+<a:Name>创建者ID</a:Name>
+<a:Code>creater_id</a:Code>
+<a:CreationDate>1793576810</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1793576810</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:DataType>LI</a:DataType>
+<a:LogicalAttribute.Mandatory>1</a:LogicalAttribute.Mandatory>
+<a:GlobalObjectID/>
+</o:EntityAttribute>
+<o:EntityAttribute Id="o71">
+<a:ObjectID>DF5AD603-0C9E-404A-9E5D-A8C1953F7BEB</a:ObjectID>
+<a:Name>创建时间戳</a:Name>
+<a:Code>create_ms</a:Code>
+<a:CreationDate>1793576810</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1793576810</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:DataType>LI</a:DataType>
+<a:LogicalAttribute.Mandatory>1</a:LogicalAttribute.Mandatory>
+<a:GlobalObjectID/>
+</o:EntityAttribute>
+<o:EntityAttribute Id="o72">
+<a:ObjectID>856F8EE7-20C8-4C21-8563-FE6612227CE8</a:ObjectID>
+<a:Name>更新者ID</a:Name>
+<a:Code>updater_id</a:Code>
+<a:CreationDate>1793576810</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1793576810</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:DataType>LI</a:DataType>
+<a:LogicalAttribute.Mandatory>1</a:LogicalAttribute.Mandatory>
+<a:GlobalObjectID/>
+</o:EntityAttribute>
+<o:EntityAttribute Id="o73">
+<a:ObjectID>7CF66674-E616-401B-BDC5-671BC74EF728</a:ObjectID>
+<a:Name>更新时间戳</a:Name>
+<a:Code>update_ms</a:Code>
+<a:CreationDate>1793576810</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1793576810</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:DataType>LI</a:DataType>
+<a:LogicalAttribute.Mandatory>1</a:LogicalAttribute.Mandatory>
+<a:GlobalObjectID/>
+</o:EntityAttribute>
+</c:Attributes>
+</o:Entity>
 </c:Entities>
 <c:Relationships>
 <o:Relationship Id="o9">
@@ -2294,6 +2483,43 @@ LABL 0 新宋体,8,N</a:FontList>
 </c:Joins>
 <c:ParentIdentifier>
 <o:Identifier Ref="o12"/>
+</c:ParentIdentifier>
+</o:Relationship>
+<o:Relationship Id="o74">
+<a:ObjectID>E60AE2AA-E15E-40E1-8DFE-5841F2ACBD29</a:ObjectID>
+<a:Name>Relationship_2</a:Name>
+<a:Code>Relationship_2</a:Code>
+<a:CreationDate>1793576810</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1793576810</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:GlobalObjectID/>
+<a:Entity1ToEntity2RoleCardinality>0,n</a:Entity1ToEntity2RoleCardinality>
+<a:Entity2ToEntity1RoleCardinality>0,1</a:Entity2ToEntity1RoleCardinality>
+<c:Object1>
+<o:Entity Ref="o64"/>
+</c:Object1>
+<c:Object2>
+<o:Entity Ref="o10"/>
+</c:Object2>
+<c:Joins>
+<o:RelationshipJoin Id="o75">
+<a:ObjectID>C3862340-CCA0-4E94-8EB6-BB969E90FAD9</a:ObjectID>
+<a:CreationDate>1793576810</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1793576810</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:GlobalObjectID/>
+<c:Object1>
+<o:EntityAttribute Ref="o67"/>
+</c:Object1>
+<c:Object2>
+<o:EntityAttribute Ref="o63"/>
+</c:Object2>
+</o:RelationshipJoin>
+</c:Joins>
+<c:ParentIdentifier>
+<o:Identifier Ref="o65"/>
 </c:ParentIdentifier>
 </o:Relationship>
 </c:Relationships>

@@ -14,6 +14,9 @@ import {
   JOB_TYPE,
   TASK_STATUS,
   TASK_TYPE,
+  type Group,
+  type GroupInput,
+  type GroupQuery,
   type Job,
   type JobInput,
   type JobQuery,
@@ -53,8 +56,40 @@ function newId(): string {
 
 const SEED_NOW = Date.now();
 
+interface GroupSeed {
+  name: string;
+  remark: string;
+}
+
+const GROUP_SEEDS: GroupSeed[] = [
+  { name: "订单与库存", remark: "交易主链路，异常优先处理" },
+  { name: "报表与账单", remark: "财务口径，出数即归档" },
+  { name: "消息触达", remark: "邮件派发与退信回执" },
+  { name: "检索与日志", remark: "索引、日志归档与冷数据" },
+];
+
+const seedGroups: Group[] = GROUP_SEEDS.map((seed, index) => {
+  const createMs = SEED_NOW - (120 - index * 7) * DAY;
+  return {
+    id: newId(),
+    name: seed.name,
+    remark: seed.remark,
+    createrId: "1",
+    createMs: String(createMs),
+    updaterId: "1",
+    updateMs: String(createMs + HOUR),
+  };
+});
+
+function groupIdOf(name: string | undefined): string | null {
+  if (!name) return null;
+  return seedGroups.find((group) => group.name === name)?.id ?? null;
+}
+
 interface JobSeed {
   name: string;
+  /** 归属分组名，留空表示未分组 */
+  groupName?: string;
   executorCode: string;
   jobType: number;
   cron?: string;
@@ -73,6 +108,7 @@ interface JobSeed {
 const JOB_SEEDS: JobSeed[] = [
   {
     name: "订单增量同步",
+    groupName: "订单与库存",
     executorCode: "order-sync",
     jobType: JOB_TYPE.cron,
     cron: "0 */5 * * * *",
@@ -86,6 +122,7 @@ const JOB_SEEDS: JobSeed[] = [
   },
   {
     name: "订单状态回补",
+    groupName: "订单与库存",
     executorCode: "order-sync",
     jobType: JOB_TYPE.cron,
     cron: "0 */15 * * * *",
@@ -98,6 +135,7 @@ const JOB_SEEDS: JobSeed[] = [
   },
   {
     name: "库存快照",
+    groupName: "订单与库存",
     executorCode: "order-sync",
     jobType: JOB_TYPE.cron,
     cron: "0 0 */6 * * *",
@@ -108,6 +146,7 @@ const JOB_SEEDS: JobSeed[] = [
   },
   {
     name: "每日对账报表",
+    groupName: "报表与账单",
     executorCode: "report-render",
     jobType: JOB_TYPE.cron,
     cron: "0 0 2 * * *",
@@ -119,6 +158,7 @@ const JOB_SEEDS: JobSeed[] = [
   },
   {
     name: "经营日报 PDF",
+    groupName: "报表与账单",
     executorCode: "report-render",
     jobType: JOB_TYPE.cron,
     cron: "0 30 7 * * MON-FRI",
@@ -129,6 +169,7 @@ const JOB_SEEDS: JobSeed[] = [
   },
   {
     name: "月度账单汇总",
+    groupName: "报表与账单",
     executorCode: "billing-rollup",
     jobType: JOB_TYPE.cron,
     cron: "0 30 0 1 * *",
@@ -140,6 +181,7 @@ const JOB_SEEDS: JobSeed[] = [
   },
   {
     name: "账单异常重算",
+    groupName: "报表与账单",
     executorCode: "billing-rollup",
     jobType: JOB_TYPE.fixedDelay,
     intervalDuration: 20 * 60_000,
@@ -150,6 +192,7 @@ const JOB_SEEDS: JobSeed[] = [
   },
   {
     name: "营销邮件派发",
+    groupName: "消息触达",
     executorCode: "mail-dispatch",
     jobType: JOB_TYPE.cron,
     cron: "0 0 9,14,18 * * *",
@@ -160,6 +203,7 @@ const JOB_SEEDS: JobSeed[] = [
   },
   {
     name: "邮件退信回执处理",
+    groupName: "消息触达",
     executorCode: "mail-dispatch",
     jobType: JOB_TYPE.fixedRate,
     intervalDuration: 8 * 60_000,
@@ -170,6 +214,7 @@ const JOB_SEEDS: JobSeed[] = [
   },
   {
     name: "商品索引重建",
+    groupName: "检索与日志",
     executorCode: "search-index",
     jobType: JOB_TYPE.cron,
     cron: "*/40 * * * * *",
@@ -181,6 +226,7 @@ const JOB_SEEDS: JobSeed[] = [
   },
   {
     name: "索引热词统计",
+    groupName: "检索与日志",
     executorCode: "search-index",
     jobType: JOB_TYPE.cron,
     cron: "0 */15 * * * *",
@@ -191,6 +237,7 @@ const JOB_SEEDS: JobSeed[] = [
   },
   {
     name: "日志归档",
+    groupName: "检索与日志",
     executorCode: "log-archive",
     jobType: JOB_TYPE.cron,
     cron: "0 0 3 * * *",
@@ -212,6 +259,7 @@ const JOB_SEEDS: JobSeed[] = [
   },
   {
     name: "结算文件推送",
+    groupName: "报表与账单",
     executorCode: "billing-rollup",
     jobType: JOB_TYPE.cron,
     cron: "0 0 6 * * *",
@@ -229,6 +277,7 @@ function buildJob(seed: JobSeed, index: number): Job {
     id: newId(),
     executorCode: seed.executorCode,
     name: seed.name,
+    groupId: groupIdOf(seed.groupName),
     params: seed.params ?? null,
     jobType: seed.jobType as Job["jobType"],
     highFreq: null,
@@ -441,6 +490,7 @@ function buildTasks(jobs: Job[]): Task[] {
 
 const state = {
   jobs: JOB_SEEDS.map(buildJob),
+  groups: [...seedGroups],
   tasks: [] as Task[],
 };
 state.tasks = buildTasks(state.jobs);
@@ -502,6 +552,10 @@ function ensureUniqueName(name: string, selfId?: string) {
 function validateInput(input: JobInput) {
   if (!input.name.trim()) throw new ApiError("名称不能为空", 400, -1);
   if (!input.executorCode.trim()) throw new ApiError("执行器编码不能为空", 400, -1);
+  if (input.groupId && !state.groups.some((group) => group.id === input.groupId)) {
+    // 与真实库的 on delete restrict / 外键校验保持一致：指向不存在的分组要报错
+    throw new ApiError("分组不存在", 400, -1);
+  }
   if (input.jobType === JOB_TYPE.cron && !input.cron?.trim()) {
     throw new ApiError("Cron 类型必须提供表达式", 400, -1);
   }
@@ -531,6 +585,7 @@ export const mockJobs = {
         (query.jobType === undefined || job.jobType === query.jobType) &&
         (query.enabled === undefined || job.enabled === query.enabled) &&
         (query.highFreq === undefined || job.highFreq === query.highFreq) &&
+        (!query.groupId || job.groupId === query.groupId) &&
         (!query.executorCode || job.executorCode === query.executorCode),
     );
     return paginate(filtered, query.page, query.size, query.orderBy);
@@ -558,6 +613,7 @@ export const mockJobs = {
       ...payload,
       id: newId(),
       highFreq: null,
+      groupId: payload.groupId ?? null,
       params: payload.params ?? null,
       cron: payload.cron ?? null,
       intervalDuration: payload.intervalDuration ?? null,
@@ -592,6 +648,8 @@ export const mockJobs = {
       ...payload,
       id: input.id,
       highFreq: null,
+      // 修改时不传 groupId 表示「不动分组」，不能因为 payload 里是 undefined 就清空
+      groupId: payload.groupId === undefined ? state.jobs[index].groupId : payload.groupId,
       updateMs: String(Date.now()),
     };
     updated.highFreq = isHighFrequency(updated);
@@ -679,6 +737,78 @@ export const mockTasks = {
   async remove(id: string): Promise<null> {
     await delay(120);
     state.tasks = state.tasks.filter((task) => task.id !== id);
+    return null;
+  },
+};
+
+export const mockGroups = {
+  async page(query: GroupQuery = {}): Promise<Page<Group>> {
+    await delay(90 + random() * 120);
+    const filtered = state.groups.filter((group) =>
+      matchesKeyword([group.name, group.remark], query.keyword),
+    );
+    return paginate(filtered, query.page ?? 1, query.size ?? 20, query.orderBy ?? "name:asc");
+  },
+
+  async list(query: GroupQuery = {}): Promise<Group[]> {
+    const page = await mockGroups.page({ ...query, page: 1, size: 500 });
+    return page.list;
+  },
+
+  async get(id: string): Promise<Group> {
+    await delay(60);
+    const group = state.groups.find((item) => item.id === id);
+    if (!group) throw new ApiError("分组不存在", 404, -2);
+    return group;
+  },
+
+  async create(input: GroupInput): Promise<Group> {
+    await delay(140);
+    const name = input.name.trim();
+    if (!name) throw new ApiError("名称不能为空", 400, -1);
+    if (state.groups.some((group) => group.name === name)) {
+      throw new ApiError(`分组「${name}」已存在`, 200, -2);
+    }
+    const now = Date.now();
+    const group: Group = {
+      id: newId(),
+      name,
+      remark: input.remark?.trim() ? input.remark.trim() : null,
+      createrId: "1",
+      createMs: String(now),
+      updaterId: "1",
+      updateMs: String(now),
+    };
+    state.groups.unshift(group);
+    return group;
+  },
+
+  async update(input: GroupInput): Promise<Group> {
+    await delay(140);
+    if (!input.id) throw new ApiError("缺少 id", 400, -1);
+    const index = state.groups.findIndex((item) => item.id === input.id);
+    if (index < 0) throw new ApiError("分组不存在", 404, -2);
+    const name = input.name.trim();
+    if (!name) throw new ApiError("名称不能为空", 400, -1);
+    if (state.groups.some((group) => group.name === name && group.id !== input.id)) {
+      throw new ApiError(`分组「${name}」已存在`, 200, -2);
+    }
+    const updated: Group = {
+      ...state.groups[index],
+      name,
+      remark: input.remark?.trim() ? input.remark.trim() : null,
+      updateMs: String(Date.now()),
+    };
+    state.groups[index] = updated;
+    return updated;
+  },
+
+  async remove(id: string): Promise<null> {
+    await delay(120);
+    if (state.jobs.some((job) => job.groupId === id)) {
+      throw new ApiError("该分组下仍有计划，外键 on delete restrict 拒绝删除", 200, -2);
+    }
+    state.groups = state.groups.filter((group) => group.id !== id);
     return null;
   },
 };

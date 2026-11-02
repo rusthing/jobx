@@ -11,6 +11,9 @@ pub struct JobxJobVo {
     pub executor_code: String,
     /// 名称
     pub name: String,
+    /// 任务分组ID
+    /// 为空表示未分组
+    pub group_id: Option<u64>,
     /// 参数
     pub params: Option<String>,
     /// 计划类型: 0=手动分派, 1=cron表达式, 2=固定延迟, 3=固定频率

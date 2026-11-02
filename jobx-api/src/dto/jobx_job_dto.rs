@@ -11,6 +11,11 @@ pub struct JobxJobDto {
     /// 名称
     /// @len 1..=50
     pub name: String,
+    /// 任务分组ID
+    ///
+    /// 为空表示未分组。分组只描述「这批计划归谁管」，不参与调度计算，
+    /// 改分组不会动 `next_assign_ms`。
+    pub group_id: Option<u64>,
     /// 参数
     /// @len 0..=800
     pub params: Option<String>,

@@ -6,7 +6,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui/Field";
 import { Segmented, Switch } from "@/components/ui/Switch";
 import { Badge } from "@/components/ui/Badge";
 import { CRON_PRESETS, describeCron, nextRuns, normalizeCron, validateCron } from "@/lib/cron";
-import { JOB_TYPE, type Job, type JobInput, type JobType } from "@/lib/api";
+import { JOB_TYPE, type Group, type Job, type JobInput, type JobType } from "@/lib/api";
 import {
   DURATION_UNIT_MS,
   formatCompact,
@@ -22,6 +22,8 @@ import { cn, jsonError, prettyJson } from "@/lib/utils";
 interface FormState {
   name: string;
   executorCode: string;
+  /** 分组 ID，空串 = 未分组 */
+  groupId: string;
   remark: string;
   jobType: JobType;
   cron: string;
@@ -42,6 +44,7 @@ function initialState(job: Job | null): FormState {
     return {
       name: "",
       executorCode: "",
+      groupId: "",
       remark: "",
       jobType: JOB_TYPE.cron,
       cron: "0 */5 * * * *",
@@ -63,6 +66,7 @@ function initialState(job: Job | null): FormState {
   return {
     name: job.name,
     executorCode: job.executorCode,
+    groupId: job.groupId ?? "",
     remark: job.remark ?? "",
     jobType: job.jobType,
     cron: job.cron ?? "",
@@ -91,6 +95,7 @@ export interface JobFormDrawerProps {
   open: boolean;
   job: Job | null;
   executors: string[];
+  groups: Group[];
   submitting: boolean;
   onClose: () => void;
   onSubmit: (input: JobInput) => void;
@@ -101,6 +106,7 @@ function JobFormDrawerImpl({
   open,
   job,
   executors,
+  groups,
   submitting,
   onClose,
   onSubmit,
@@ -190,6 +196,8 @@ function JobFormDrawerImpl({
       ...(job ? { id: job.id } : {}),
       name: form.name.trim(),
       executorCode: form.executorCode.trim(),
+      // 空串显式发 null：修改时「清空分组」必须是清空，而不是「不传=不动」
+      groupId: form.groupId || null,
       jobType: form.jobType,
       cron: form.jobType === JOB_TYPE.cron ? normalizeCron(form.cron) : null,
       intervalDuration: intervalMs,
@@ -287,7 +295,21 @@ function JobFormDrawerImpl({
               </datalist>
             </Field>
 
-            <Field label="备注" hint="给人看的上下文，可为空">
+            <Field
+              label="分组"
+              hint="只决定列表里归到哪一组，不影响调度节奏"
+            >
+              <Select value={form.groupId} onChange={(event) => set("groupId", event.target.value)}>
+                <option value="">未分组</option>
+                {groups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+
+            <Field label="备注" className="col-span-2" hint="给人看的上下文，可为空">
               <Input
                 value={form.remark}
                 onChange={(event) => set("remark", event.target.value)}

@@ -11,6 +11,7 @@ pub struct Model {
     pub id: i64,
     #[sea_orm(unique)]
     pub name: String,
+    pub group_id: Option<i64>,
     pub params: Option<String>,
     pub job_type: i16,
     pub high_freq: Option<bool>,
@@ -31,6 +32,14 @@ pub struct Model {
     pub update_ms: i64,
     #[sea_orm(has_many)]
     pub jobx_tasks: HasMany<super::jobx_task::Entity>,
+    #[sea_orm(
+        belongs_to,
+        from = "group_id",
+        to = "id",
+        on_update = "Restrict",
+        on_delete = "Restrict"
+    )]
+    pub jobx_group: BelongsTo<Option<super::jobx_group::Entity>>,
 }
 
 impl ActiveModelBehavior for ActiveModel {}

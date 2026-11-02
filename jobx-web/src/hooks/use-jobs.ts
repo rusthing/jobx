@@ -72,6 +72,7 @@ export function useJobMutations() {
         id: job.id,
         executorCode: job.executorCode,
         name: job.name,
+        groupId: job.groupId,
         params: job.params,
         jobType: job.jobType,
         cron: job.cron,

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   ArrowDownUp,
   CircleSlash,
+  Folder,
+  FolderCog,
   Pencil,
   Play,
   Plus,
@@ -26,6 +28,7 @@ import {
   useJobMutations,
   useJobsPage,
 } from "@/hooks/use-jobs";
+import { useAllGroups } from "@/hooks/use-groups";
 import { useDebounced } from "@/hooks/use-debounce";
 import { useNow } from "@/hooks/use-now";
 import {
@@ -52,6 +55,8 @@ export function JobsPage() {
   const [type, setType] = useState<JobType | "all">("all");
   const [enabled, setEnabled] = useState<EnabledFilter>("all");
   const [executor, setExecutor] = useState(() => searchParams.get("executor") ?? "all");
+  // 分组管理页的「计划数」深链进来：/jobs?group=<id>
+  const [group, setGroup] = useState(() => searchParams.get("group") ?? "all");
   const [page, setPage] = useState(1);
   const [sortNext, setSortNext] = useState(false);
 
@@ -64,15 +69,17 @@ export function JobsPage() {
       jobType: type === "all" ? undefined : type,
       enabled: enabled === "all" ? undefined : enabled === "enabled",
       executorCode: executor === "all" ? undefined : executor,
+      groupId: group === "all" ? undefined : group,
       page,
       size: 20,
       orderBy: sortNext ? "next_assign_ms:asc" : "update_ms:desc",
     }),
-    [keyword, type, enabled, executor, page, sortNext],
+    [keyword, type, enabled, executor, group, page, sortNext],
   );
 
   const { data, isLoading, isFetching, error, refetch } = useJobsPage(query);
   const allJobs = useAllJobs();
+  const allGroups = useAllGroups();
   const { create, update, remove, trigger, setEnabled: toggleEnabledMutation } = useJobMutations();
 
   const urlJobId = searchParams.get("job");
@@ -88,7 +95,9 @@ export function JobsPage() {
   }, [urlNew, setSearchParams]);
 
   useEffect(() => {
-    if (searchParams.has("executor")) setSearchParams({}, { replace: true });
+    if (searchParams.has("executor") || searchParams.has("group")) {
+      setSearchParams({}, { replace: true });
+    }
   }, [searchParams, setSearchParams]);
 
   useEffect(() => {
@@ -101,6 +110,16 @@ export function JobsPage() {
   const executors = useMemo(
     () => [...new Set((allJobs.data ?? []).map((job) => job.executorCode))].sort(),
     [allJobs.data],
+  );
+
+  /*
+   * 分组名走自己的全量查询再按 ID 映射，而不是让计划接口内联分组信息：
+   * 后者会让每条计划都带一份分组快照，分组改名后同一页里能看到新旧两种叫法。
+   */
+  const groups = useMemo(() => allGroups.data ?? [], [allGroups.data]);
+  const groupNames = useMemo(
+    () => new Map(groups.map((item) => [item.id, item.name])),
+    [groups],
   );
 
   const total = Number(data?.total ?? 0);
@@ -154,7 +173,8 @@ export function JobsPage() {
     });
   };
 
-  const filtered = keyword || type !== "all" || enabled !== "all" || executor !== "all";
+  const filtered =
+    keyword || type !== "all" || enabled !== "all" || executor !== "all" || group !== "all";
 
   /*
    * JobFormDrawer 是 memo 化的（页面上有一个每秒 tick 的 now），所以传给它的回调必须引用
@@ -274,6 +294,32 @@ export function JobsPage() {
             ))}
           </Select>
 
+          <Select
+            value={group}
+            onChange={(event) => {
+              setGroup(event.target.value);
+              resetPage();
+            }}
+            className="h-8 w-[132px] text-[12.5px]"
+            title="按分组筛选（只筛具体分组；未归组的计划在「全部」里）"
+          >
+            <option value="all">全部分组</option>
+            {groups.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </Select>
+
+          <Link
+            to="/groups"
+            title="管理分组：新建、改名、删除"
+            className="flex h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-2 text-[12px] text-muted transition-colors hover:border-line-strong hover:text-ink"
+          >
+            <FolderCog className="size-3" />
+            管理分组
+          </Link>
+
           <button
             type="button"
             onClick={() => {
@@ -333,6 +379,7 @@ export function JobsPage() {
                     setType("all");
                     setEnabled("all");
                     setExecutor("all");
+                    setGroup("all");
                     setPage(1);
                   }}
                 >
@@ -347,10 +394,11 @@ export function JobsPage() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[960px] border-collapse text-left">
+            <table className="w-full min-w-[1080px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-line bg-sunken/60 text-[11px] text-muted">
                   <th className="px-4 py-2 font-medium">计划</th>
+                  <th className="px-3 py-2 font-medium">分组</th>
                   <th className="px-3 py-2 font-medium">执行器</th>
                   <th className="px-3 py-2 font-medium">调度</th>
                   <th className="px-3 py-2 font-medium">状态</th>
@@ -390,6 +438,20 @@ export function JobsPage() {
                             </span>
                           )}
                         </div>
+                      </td>
+
+                      <td className="max-w-[120px] px-3 py-2.5">
+                        {job.groupId ? (
+                          <Badge tone="muted" className="max-w-full">
+                            <Folder className="size-2.5 shrink-0 opacity-70" />
+                            <span className="truncate">
+                              {/* 分组被删掉时后端外键会拦住，取不到名字说明数据在别处被改过，直接露 ID */}
+                              {groupNames.get(job.groupId) ?? job.groupId}
+                            </span>
+                          </Badge>
+                        ) : (
+                          <span className="text-[11.5px] text-muted/70">未分组</span>
+                        )}
                       </td>
 
                       <td className="px-3 py-2.5">
@@ -494,6 +556,7 @@ export function JobsPage() {
         open={editor !== null}
         job={editor?.mode === "edit" ? editor.job : null}
         executors={executors}
+        groups={groups}
         submitting={create.isPending || update.isPending}
         onClose={closeEditor}
         onSubmit={submitEditor}

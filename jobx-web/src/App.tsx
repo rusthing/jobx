@@ -6,6 +6,7 @@ import { ToastProvider } from "@/components/ui/Toast";
 import { subscribeDataMode } from "@/lib/api";
 import { OverviewPage } from "@/features/overview/OverviewPage";
 import { JobsPage } from "@/features/jobs/JobsPage";
+import { GroupsPage } from "@/features/groups/GroupsPage";
 import { TasksPage } from "@/features/tasks/TasksPage";
 import { ExecutorsPage } from "@/features/executors/ExecutorsPage";
 
@@ -61,6 +62,7 @@ export default function App() {
             <Route element={<AppShell />}>
               <Route index element={<OverviewPage />} />
               <Route path="jobs" element={<JobsPage />} />
+              <Route path="groups" element={<GroupsPage />} />
               <Route path="tasks" element={<TasksPage />} />
               <Route path="executors" element={<ExecutorsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
