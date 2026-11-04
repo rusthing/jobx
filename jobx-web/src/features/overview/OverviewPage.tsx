@@ -22,7 +22,7 @@ import { TrendChart } from "@/components/charts";
 import { ExecutorChip, JobTypeBadge } from "@/components/domain";
 import { JOB_TYPE, JOB_TYPE_META, setDataMode, type JobType } from "@/lib/api";
 import { formatCompact, formatCountdown, formatDuration, formatRelative } from "@/lib/time";
-import { percent } from "@/lib/utils";
+import { percent, shortId } from "@/lib/utils";
 import { describeCron } from "@/lib/cron";
 
 const TYPE_COLORS: Record<JobType, string> = {
@@ -52,7 +52,7 @@ export function OverviewPage() {
 
   const fire = (id: string, name: string) => {
     trigger.mutate(id, {
-      onSuccess: (task) => toast.success(`已分派「${name}」`, `执行记录 #${task.id}`),
+      onSuccess: (task) => toast.success(`已分派「${name}」`, `执行记录 #${shortId(task.id)}`),
       onError: (mutationError) => toast.error("触发失败", mutationError.message),
     });
   };
@@ -183,9 +183,17 @@ export function OverviewPage() {
         />
         <StatCard
           label="24h 成功率"
-          value={data.successRate}
-          suffix="%"
-          accent={data.successRate >= 98 ? "success" : data.successRate >= 90 ? "warn" : "danger"}
+          value={data.successRate ?? "--"}
+          suffix={data.successRate === null ? undefined : "%"}
+          accent={
+            data.successRate === null
+              ? "default"
+              : data.successRate >= 98
+                ? "success"
+                : data.successRate >= 90
+                  ? "warn"
+                  : "danger"
+          }
           icon={<Gauge className="size-3.5" />}
           footer={
             <span className="flex items-center justify-between gap-2">
@@ -313,7 +321,11 @@ export function OverviewPage() {
                       <div className="mt-1 flex items-center gap-2">
                         <ExecutorChip code={job.executorCode} />
                         <span className="truncate text-[10.5px] text-muted">
-                          {job.cron ? (describeCron(job.cron) ?? job.cron) : "固定间隔"}
+                          {job.cron
+                            ? (describeCron(job.cron) ?? job.cron)
+                            : job.intervalDuration
+                              ? `每 ${formatDuration(job.intervalDuration)}`
+                              : "手动触发"}
                         </span>
                       </div>
                     </div>
@@ -365,7 +377,7 @@ export function OverviewPage() {
                     <div className="flex items-center gap-2">
                       <AlertTriangle className="size-3.5 shrink-0 text-danger" />
                       <span className="truncate text-[12.5px] font-medium text-ink">
-                        {job?.name ?? `计划 #${task.jobId ?? "—"}`}
+                        {job?.name ?? (task.jobId ? `计划 #${shortId(task.jobId)}` : "计划 --")}
                       </span>
                       <span className="ml-auto shrink-0 text-[10.5px] text-muted">
                         {formatRelative(task.execEndMs ?? task.assignMs, now)}

@@ -1,9 +1,57 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { cn } from "@/lib/utils";
 import { IconButton } from "./Button";
+
+const FOCUSABLE =
+  'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
+/**
+ * 弹层打开时把 Tab 圈在弹层内，关闭后把焦点还给触发元素。
+ * 不这样做的话键盘用户会 Tab 到遮罩背后的页面，抽屉「看起来打开了」实际焦点已经跑走。
+ */
+function useDialogFocus(open: boolean) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const node = ref.current;
+    const focusables = () =>
+      node ? Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE)) : [];
+
+    (focusables()[0] ?? node)?.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Tab" || !node) return;
+      const items = focusables();
+      if (items.length === 0) {
+        event.preventDefault();
+        node.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      previous?.focus();
+    };
+  }, [open]);
+
+  return ref;
+}
 
 export interface DrawerProps {
   open: boolean;
@@ -28,6 +76,7 @@ export function Drawer({
   badge,
 }: DrawerProps) {
   useBodyScrollLock(open);
+  const dialogRef = useDialogFocus(open);
 
   useEffect(() => {
     if (!open) return;
@@ -49,9 +98,12 @@ export function Drawer({
       */}
       <div className="absolute inset-0 animate-fade bg-ink/25" onClick={onClose} aria-hidden />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        className="relative flex h-full max-w-full animate-slide-left flex-col border-l border-line bg-surface shadow-float"
+        aria-label={typeof title === "string" ? title : undefined}
+        tabIndex={-1}
+        className="relative flex h-full max-w-full animate-slide-left flex-col border-l border-line bg-surface shadow-float focus:outline-none"
         style={{ width }}
       >
         <header className="flex items-start justify-between gap-3 border-b border-line px-5 py-3.5">
@@ -100,6 +152,7 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   useBodyScrollLock(open);
+  const dialogRef = useDialogFocus(open);
 
   useEffect(() => {
     if (!open) return;
@@ -116,9 +169,12 @@ export function ConfirmDialog({
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
       <div className="absolute inset-0 animate-fade bg-ink/30" onClick={onCancel} aria-hidden />
       <div
+        ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
-        className="relative w-full max-w-[400px] animate-rise rounded-[14px] border border-line bg-surface p-5 shadow-float"
+        aria-label={title}
+        tabIndex={-1}
+        className="relative w-full max-w-[400px] animate-rise rounded-[14px] border border-line bg-surface p-5 shadow-float focus:outline-none"
       >
         <h2 className="text-[14.5px] font-semibold text-ink">{title}</h2>
         {description && (
@@ -128,7 +184,7 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="h-8 rounded-lg border border-line px-3 text-[13px] font-medium text-ink-soft hover:bg-sunken"
+            className="h-9 rounded-lg border border-line px-3 text-[13px] font-medium text-ink-soft hover:bg-sunken"
           >
             取消
           </button>
@@ -137,7 +193,7 @@ export function ConfirmDialog({
             disabled={loading}
             onClick={onConfirm}
             className={cn(
-              "h-8 rounded-lg px-3 text-[13px] font-medium text-white disabled:opacity-50",
+              "h-9 rounded-lg px-3 text-[13px] font-medium text-white disabled:opacity-50",
               tone === "danger" ? "bg-danger hover:brightness-95" : "bg-accent hover:bg-accent-strong",
             )}
           >

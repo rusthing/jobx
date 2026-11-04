@@ -39,11 +39,21 @@ import {
   type JobType,
 } from "@/lib/api";
 import { formatCompact, formatRelative } from "@/lib/time";
-import { cn } from "@/lib/utils";
+import { cn, shortId } from "@/lib/utils";
 import { JobFormDrawer } from "./JobFormDrawer";
 
 type Editor = { mode: "new" } | { mode: "edit"; job: Job } | null;
 type EnabledFilter = "all" | "enabled" | "disabled";
+type TimeRange = "all" | "24h" | "7d" | "30d";
+
+const PAGE_SIZE = 20;
+
+const TIME_RANGES: Array<{ value: TimeRange; label: string; ms?: number }> = [
+  { value: "all", label: "创建时间" },
+  { value: "24h", label: "24 小时内", ms: 24 * 3_600_000 },
+  { value: "7d", label: "7 天内", ms: 7 * 24 * 3_600_000 },
+  { value: "30d", label: "30 天内", ms: 30 * 24 * 3_600_000 },
+];
 
 export function JobsPage() {
   const toast = useToast();
@@ -57,8 +67,17 @@ export function JobsPage() {
   const [executor, setExecutor] = useState(() => searchParams.get("executor") ?? "all");
   // 分组管理页的「计划数」深链进来：/jobs?group=<id>
   const [group, setGroup] = useState(() => searchParams.get("group") ?? "all");
+  const [range, setRange] = useState<TimeRange>("all");
+  const [rangeStart, setRangeStart] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [sortNext, setSortNext] = useState(false);
+
+  const changeRange = (next: TimeRange) => {
+    setRange(next);
+    const span = TIME_RANGES.find((item) => item.value === next)?.ms;
+    setRangeStart(span ? Date.now() - span : null);
+    setPage(1);
+  };
 
   const [editor, setEditor] = useState<Editor>(null);
   const [deleting, setDeleting] = useState<Job | null>(null);
@@ -70,11 +89,13 @@ export function JobsPage() {
       enabled: enabled === "all" ? undefined : enabled === "enabled",
       executorCode: executor === "all" ? undefined : executor,
       groupId: group === "all" ? undefined : group,
+      // 时间范围在切换时取一次基准，避免轮询把「7 天内」变成滑动的窗口
+      createdAfterMs: rangeStart ? String(rangeStart) : undefined,
       page,
-      size: 20,
+      size: PAGE_SIZE,
       orderBy: sortNext ? "next_assign_ms:asc" : "update_ms:desc",
     }),
-    [keyword, type, enabled, executor, group, page, sortNext],
+    [keyword, type, enabled, executor, group, rangeStart, page, sortNext],
   );
 
   const { data, isLoading, isFetching, error, refetch } = useJobsPage(query);
@@ -83,29 +104,60 @@ export function JobsPage() {
   const { create, update, remove, trigger, setEnabled: toggleEnabledMutation } = useJobMutations();
 
   const urlJobId = searchParams.get("job");
-  const urlNew = searchParams.get("new");
   const detail = useJobDetail(urlJobId);
 
-  // 深链：/jobs?new=1 打开新建；/jobs?job=<id> 打开编辑
+  /*
+   * 深链：/jobs?new=1 打开新建；/jobs?job=<id> 打开编辑；/jobs?executor=&group= 预置筛选。
+   * 只删除「本次已消费」的 key，不能一把清空 URL：/jobs?job=123&executor=x 里 job 的
+   * 详情请求还在路上，清空会把 job 参数提前抹掉，编辑面板永远打不开。
+   */
   useEffect(() => {
-    if (urlNew === "1") {
-      setEditor({ mode: "new" });
-      setSearchParams({}, { replace: true });
-    }
-  }, [urlNew, setSearchParams]);
+    const executorParam = searchParams.get("executor");
+    const groupParam = searchParams.get("group");
+    const isNew = searchParams.get("new") === "1";
+    if (!executorParam && !groupParam && !isNew) return;
 
-  useEffect(() => {
-    if (searchParams.has("executor") || searchParams.has("group")) {
-      setSearchParams({}, { replace: true });
+    if (executorParam) {
+      setExecutor(executorParam);
+      setPage(1);
     }
+    if (groupParam) {
+      setGroup(groupParam);
+      setPage(1);
+    }
+    if (isNew) setEditor({ mode: "new" });
+
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("executor");
+        next.delete("group");
+        next.delete("new");
+        return next;
+      },
+      { replace: true },
+    );
   }, [searchParams, setSearchParams]);
 
   useEffect(() => {
-    if (urlJobId && detail.data) {
-      setEditor({ mode: "edit", job: detail.data });
-      setSearchParams({}, { replace: true });
-    }
+    if (!urlJobId || !detail.data) return;
+    setEditor({ mode: "edit", job: detail.data });
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("job");
+        return next;
+      },
+      { replace: true },
+    );
   }, [urlJobId, detail.data, setSearchParams]);
+
+  // 删除最后一页最后一条、或从深链带着越界页码进来时，把页码夹回有效范围
+  useEffect(() => {
+    if (!data) return;
+    const pages = Math.max(1, Math.ceil(Number(data.total) / PAGE_SIZE));
+    if (page > pages) setPage(pages);
+  }, [data, page]);
 
   const executors = useMemo(
     () => [...new Set((allJobs.data ?? []).map((job) => job.executorCode))].sort(),
@@ -123,9 +175,8 @@ export function JobsPage() {
   );
 
   const total = Number(data?.total ?? 0);
-  const pageNum = Number(data?.pageNum ?? 1);
-  const pageSize = 20;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const pageNum = Number(data?.pageNum ?? page);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const resetPage = () => setPage(1);
 
@@ -174,7 +225,12 @@ export function JobsPage() {
   };
 
   const filtered =
-    keyword || type !== "all" || enabled !== "all" || executor !== "all" || group !== "all";
+    keyword ||
+    type !== "all" ||
+    enabled !== "all" ||
+    executor !== "all" ||
+    group !== "all" ||
+    range !== "all";
 
   /*
    * JobFormDrawer 是 memo 化的（页面上有一个每秒 tick 的 now），所以传给它的回调必须引用
@@ -243,8 +299,9 @@ export function JobsPage() {
                 setKeywordInput(event.target.value);
                 resetPage();
               }}
-              placeholder="搜索名称、执行器、备注、cron…"
-              className="h-8 pl-8 text-[12.5px]"
+              placeholder="搜索名称、执行器、备注…"
+              aria-label="搜索任务计划"
+              className="h-9 pl-8 text-[12.5px]"
             />
           </div>
 
@@ -268,7 +325,7 @@ export function JobsPage() {
               setType(event.target.value === "all" ? "all" : (Number(event.target.value) as JobType));
               resetPage();
             }}
-            className="h-8 w-[118px] text-[12.5px]"
+            className="h-9 w-[118px] text-[12.5px]"
           >
             <option value="all">全部类型</option>
             {Object.entries(JOB_TYPE_META).map(([value, meta]) => (
@@ -284,7 +341,7 @@ export function JobsPage() {
               setExecutor(event.target.value);
               resetPage();
             }}
-            className="h-8 w-[142px] font-mono text-[12px]"
+            className="h-9 w-[142px] font-mono text-[12px]"
           >
             <option value="all">全部执行器</option>
             {executors.map((code) => (
@@ -300,13 +357,26 @@ export function JobsPage() {
               setGroup(event.target.value);
               resetPage();
             }}
-            className="h-8 w-[132px] text-[12.5px]"
+            className="h-9 w-[132px] text-[12.5px]"
             title="按分组筛选（只筛具体分组；未归组的计划在「全部」里）"
           >
             <option value="all">全部分组</option>
             {groups.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
+              </option>
+            ))}
+          </Select>
+
+          <Select
+            value={range}
+            onChange={(event) => changeRange(event.target.value as TimeRange)}
+            className="h-9 w-[118px] text-[12.5px]"
+            aria-label="按创建时间筛选"
+          >
+            {TIME_RANGES.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
               </option>
             ))}
           </Select>
@@ -380,6 +450,8 @@ export function JobsPage() {
                     setEnabled("all");
                     setExecutor("all");
                     setGroup("all");
+                    setRange("all");
+                    setRangeStart(null);
                     setPage(1);
                   }}
                 >
@@ -393,11 +465,16 @@ export function JobsPage() {
             }
           />
         ) : (
-          <div className="overflow-x-auto">
+          <div
+            className="overflow-x-auto"
+            tabIndex={0}
+            role="region"
+            aria-label="任务计划表格，可横向滚动"
+          >
             <table className="w-full min-w-[1080px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-line bg-sunken/60 text-[11px] text-muted">
-                  <th className="px-4 py-2 font-medium">计划</th>
+                  <th className="col-sticky px-4 py-2 font-medium">计划</th>
                   <th className="px-3 py-2 font-medium">分组</th>
                   <th className="px-3 py-2 font-medium">执行器</th>
                   <th className="px-3 py-2 font-medium">调度</th>
@@ -418,7 +495,7 @@ export function JobsPage() {
                         disabled && "opacity-[0.72]",
                       )}
                     >
-                      <td className="max-w-[300px] px-4 py-2.5">
+                      <td className="col-sticky max-w-[190px] px-4 py-2.5 md:max-w-[300px]">
                         <div className="flex items-center gap-1.5">
                           <button
                             type="button"
@@ -429,8 +506,13 @@ export function JobsPage() {
                           </button>
                           {job.highFreq && <HighFreqBadge />}
                         </div>
-                        <div className="mt-0.5 flex items-center gap-1">
-                          <span className="font-mono text-[10px] text-muted/80">#{job.id}</span>
+                        <div className="mt-0.5 flex min-w-0 items-center gap-1">
+                          <span
+                            className="shrink-0 whitespace-nowrap font-mono text-[10px] text-muted/80"
+                            title={job.id}
+                          >
+                            #{shortId(job.id)}
+                          </span>
                           <CopyButton value={job.id} label="复制 ID" />
                           {job.remark && (
                             <span className="truncate text-[10.5px] text-muted/80">
@@ -471,7 +553,10 @@ export function JobsPage() {
                             size="sm"
                             checked={job.enabled}
                             onChange={() => toggleEnabled(job)}
-                            disabled={toggleEnabledMutation.isPending}
+                            disabled={
+                              toggleEnabledMutation.isPending &&
+                              toggleEnabledMutation.variables?.id === job.id
+                            }
                             label={`${job.enabled ? "停用" : "启用"} ${job.name}`}
                           />
                           <span className="text-[11px] text-muted">
@@ -490,7 +575,7 @@ export function JobsPage() {
                           </>
                         ) : (
                           <span className="text-[11.5px] text-muted">
-                            {job.jobType === JOB_TYPE.manual ? "手动" : "—"}
+                            {job.jobType === JOB_TYPE.manual ? "手动" : "--"}
                           </span>
                         )}
                       </td>
@@ -523,11 +608,16 @@ export function JobsPage() {
         {data && Number(data.total) > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-4 py-2.5 text-[11.5px] text-muted">
             <span className="tnum">
-              第 {(pageNum - 1) * pageSize + 1}–{Math.min(pageNum * pageSize, total)} 条 / 共 {total}{" "}
+              第 {(pageNum - 1) * PAGE_SIZE + 1}–{Math.min(pageNum * PAGE_SIZE, total)} 条 / 共 {total}{" "}
               条
             </span>
             <div className="flex items-center gap-1.5">
-              <Button size="xs" disabled={pageNum <= 1} onClick={() => setPage(pageNum - 1)}>
+              <Button
+                size="xs"
+                className="min-h-9 md:min-h-0"
+                disabled={pageNum <= 1}
+                onClick={() => setPage(pageNum - 1)}
+              >
                 上一页
               </Button>
               <span className="tnum px-1 font-mono text-[11px] text-ink-soft">
@@ -535,6 +625,7 @@ export function JobsPage() {
               </span>
               <Button
                 size="xs"
+                className="min-h-9 md:min-h-0"
                 disabled={pageNum >= totalPages}
                 onClick={() => setPage(pageNum + 1)}
               >

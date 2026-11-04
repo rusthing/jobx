@@ -17,7 +17,11 @@ import {
   toDateTimeLocal,
   type DurationUnit,
 } from "@/lib/time";
-import { cn, jsonError, prettyJson } from "@/lib/utils";
+import { cn, jsonError, prettyJson, shortId } from "@/lib/utils";
+
+// 与 jobx_job_dto.rs 的 @len 保持一致：超出会在服务端被 -1 拒绝，前端先拦
+const LIMITS = { name: 50, executorCode: 50, remark: 50, cron: 30, params: 800 } as const;
+const U32_MAX = 4_294_967_295;
 
 interface FormState {
   name: string;
@@ -133,6 +137,7 @@ function JobFormDrawerImpl({
   const cronError = useMemo(() => {
     if (form.jobType !== JOB_TYPE.cron) return null;
     if (!form.cron.trim()) return "Cron 类型必须提供表达式";
+    if (form.cron.length > LIMITS.cron) return `Cron 表达式不能超过 ${LIMITS.cron} 字符`;
     return validateCron(form.cron);
   }, [form.cron, form.jobType]);
 
@@ -165,29 +170,56 @@ function JobFormDrawerImpl({
     return false;
   }, [upcoming, intervalMs, form.jobType]);
 
+  const rawAssignLead = form.assignLeadSec.trim();
+  const assignLeadMs = rawAssignLead ? Number(rawAssignLead) * 1_000 : null;
+  const rawStreamMax = form.streamMaxLen.trim();
+  const streamMaxLen = rawStreamMax ? Number(rawStreamMax) : null;
+
   const errors = {
-    name: form.name.trim() ? null : "名称不能为空",
-    executorCode: form.executorCode.trim() ? null : "执行器编码不能为空",
+    name: !form.name.trim()
+      ? "名称不能为空"
+      : form.name.trim().length > LIMITS.name
+        ? `名称不能超过 ${LIMITS.name} 字符`
+        : null,
+    executorCode: !form.executorCode.trim()
+      ? "执行器编码不能为空"
+      : form.executorCode.trim().length > LIMITS.executorCode
+        ? `执行器编码不能超过 ${LIMITS.executorCode} 字符`
+        : null,
+    remark:
+      form.remark.trim().length > LIMITS.remark
+        ? `备注不能超过 ${LIMITS.remark} 字符`
+        : null,
     interval:
       (form.jobType === JOB_TYPE.fixedDelay || form.jobType === JOB_TYPE.fixedRate) &&
-      (!Number.isFinite(intervalMs) || (intervalMs ?? 0) <= 0)
-        ? "间隔必须大于 0"
+      (!Number.isSafeInteger(intervalMs) || (intervalMs ?? 0) <= 0)
+        ? "间隔必须是大于 0 的整数毫秒"
+        : null,
+    assignLead:
+      assignLeadMs !== null &&
+      (!Number.isSafeInteger(assignLeadMs) || assignLeadMs < 0)
+        ? "提前量必须是大于等于 0 的整数秒"
+        : null,
+    streamMax:
+      streamMaxLen !== null &&
+      (!Number.isSafeInteger(streamMaxLen) || streamMaxLen <= 0 || streamMaxLen > U32_MAX)
+        ? `Stream 上限必须是 1–${U32_MAX} 的整数`
         : null,
     validRange:
       form.validBegin && form.validEnd && form.validEnd < form.validBegin
         ? "结束时间不能早于开始时间"
         : null,
     expire:
-      expireMs !== null && (!Number.isFinite(expireMs) || expireMs <= 0)
-        ? "保留时长必须大于 0"
+      expireMs !== null && (!Number.isSafeInteger(expireMs) || expireMs <= 0)
+        ? "保留时长必须是大于 0 的整数毫秒"
+        : null,
+    params:
+      form.params.trim().length > LIMITS.params
+        ? `执行参数不能超过 ${LIMITS.params} 字符`
         : null,
   };
 
-  const invalid =
-    Boolean(errors.name || errors.executorCode || errors.interval || errors.validRange) ||
-    Boolean(errors.expire) ||
-    Boolean(cronError) ||
-    Boolean(paramsError);
+  const invalid = Object.values(errors).some(Boolean) || Boolean(cronError) || Boolean(paramsError);
 
   const submit = () => {
     setSubmitted(true);
@@ -201,8 +233,8 @@ function JobFormDrawerImpl({
       jobType: form.jobType,
       cron: form.jobType === JOB_TYPE.cron ? normalizeCron(form.cron) : null,
       intervalDuration: intervalMs,
-      assignLeadMs: form.assignLeadSec ? Math.round(Number(form.assignLeadSec) * 1_000) : null,
-      streamMaxLen: form.streamMaxLen ? Number(form.streamMaxLen) : null,
+      assignLeadMs,
+      streamMaxLen,
       taskExpireDuration: expireMs,
       validBeginMs: fromDateTimeLocal(form.validBegin),
       validEndMs: fromDateTimeLocal(form.validEnd),
@@ -230,7 +262,9 @@ function JobFormDrawerImpl({
       }
       subtitle={
         job ? (
-          <span className="font-mono text-[11px] text-muted">#{job.id}</span>
+          <span className="font-mono text-[11px] text-muted" title={job.id}>
+            #{shortId(job.id)}
+          </span>
         ) : (
           "保存后由调度器计算首次分派时间"
         )
@@ -269,6 +303,7 @@ function JobFormDrawerImpl({
               onChange={(event) => set("name", event.target.value)}
               onBlur={markTouched("name")}
               placeholder="例如：订单增量同步"
+              maxLength={LIMITS.name}
               autoFocus={!job}
             />
           </Field>
@@ -286,6 +321,7 @@ function JobFormDrawerImpl({
                 onBlur={markTouched("executorCode")}
                 placeholder="order-sync"
                 list="jobx-executors"
+                maxLength={LIMITS.executorCode}
                 className="font-mono"
               />
               <datalist id="jobx-executors">
@@ -309,11 +345,18 @@ function JobFormDrawerImpl({
               </Select>
             </Field>
 
-            <Field label="备注" className="col-span-2" hint="给人看的上下文，可为空">
+            <Field
+              label="备注"
+              className="col-span-2"
+              error={showError("remark")}
+              hint={`给人看的上下文，可为空，最多 ${LIMITS.remark} 字符`}
+            >
               <Input
                 value={form.remark}
                 onChange={(event) => set("remark", event.target.value)}
+                onBlur={markTouched("remark")}
                 placeholder="例：大促期间暂停"
+                maxLength={LIMITS.remark}
               />
             </Field>
           </div>
@@ -372,6 +415,7 @@ function JobFormDrawerImpl({
                   onChange={(event) => set("cron", event.target.value)}
                   className="font-mono"
                   spellCheck={false}
+                  maxLength={LIMITS.cron}
                   placeholder="0 */5 * * * *"
                 />
               </Field>
@@ -446,6 +490,7 @@ function JobFormDrawerImpl({
           <div className="grid grid-cols-2 gap-3">
             <Field
               label="分派提前量（秒）"
+              error={showError("assignLead")}
               hint={`留空则用调度器默认值；当前 ${
                 form.assignLeadSec ? `${form.assignLeadSec} 秒` : "默认"
               }`}
@@ -453,16 +498,22 @@ function JobFormDrawerImpl({
               <Input
                 value={form.assignLeadSec}
                 onChange={(event) => set("assignLeadSec", event.target.value)}
+                onBlur={markTouched("assignLead")}
                 inputMode="numeric"
                 className="font-mono"
                 placeholder="5"
               />
             </Field>
 
-            <Field label="Stream 长度上限" hint="MAXLEN ~ N，留空用全局默认（10000）">
+            <Field
+              label="Stream 长度上限"
+              error={showError("streamMax")}
+              hint="MAXLEN ~ N，留空用全局默认（10000）"
+            >
               <Input
                 value={form.streamMaxLen}
                 onChange={(event) => set("streamMaxLen", event.target.value)}
+                onBlur={markTouched("streamMax")}
                 inputMode="numeric"
                 className="font-mono"
                 placeholder="10000"
@@ -542,7 +593,9 @@ function JobFormDrawerImpl({
                   JSON 非法
                 </span>
               ) : (
-                <span className="text-[10.5px] text-muted">JSON 对象，可留空</span>
+                <span className="text-[10.5px] text-muted">
+                  JSON 对象，可留空 · {form.params.length}/{LIMITS.params}
+                </span>
               )}
               <button
                 type="button"
@@ -560,11 +613,15 @@ function JobFormDrawerImpl({
             onChange={(event) => set("params", event.target.value)}
             rows={6}
             spellCheck={false}
+            maxLength={LIMITS.params}
             placeholder={'{\n  "batchSize": 500\n}'}
             className={cn("font-mono text-[12px]", paramsError && "border-danger/50 focus:border-danger/60 focus:ring-danger/10")}
           />
           {paramsError && (
             <p className="font-mono text-[10.5px] leading-snug text-danger/90">{paramsError}</p>
+          )}
+          {showError("params") && (
+            <p className="text-[10.5px] leading-snug text-danger/90">{showError("params")}</p>
           )}
         </section>
 
@@ -588,7 +645,7 @@ function JobFormDrawerImpl({
               <div className="flex justify-between gap-2">
                 <dt className="text-muted">下次分派</dt>
                 <dd className="tnum font-mono text-ink-soft">
-                  {job.nextAssignMs ? formatCompact(job.nextAssignMs) : "—"}
+                  {job.nextAssignMs ? formatCompact(job.nextAssignMs) : "--"}
                 </dd>
               </div>
               <div className="flex justify-between gap-2">

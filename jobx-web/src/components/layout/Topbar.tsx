@@ -1,17 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, CircleUser, Command, RotateCw, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/time";
-import { getOperatorId, setOperatorId } from "@/lib/api/http";
+import {
+  getOperatorId,
+  isValidOperatorId,
+  setOperatorId,
+} from "@/lib/api/http";
 import { useNow } from "@/hooks/use-now";
 import { useToast } from "@/components/ui/Toast";
 import { Wordmark } from "./Logo";
+import { NAV } from "./Sidebar";
 
 const TITLES: Record<string, string> = {
   "/": "调度总览",
   "/jobs": "任务计划",
+  "/groups": "计划分组",
   "/tasks": "执行记录",
   "/executors": "执行器",
 };
@@ -34,11 +40,17 @@ function OperatorMenu() {
 
   const save = () => {
     const next = value.trim();
-    if (!/^\d+$/.test(next)) {
-      toast.error("操作人 ID 必须是数字", "它会作为 X-User-Id 请求头写入审计字段");
+    if (!/^\d+$/.test(next) || !isValidOperatorId(next)) {
+      toast.error(
+        "操作人 ID 必须是 u64 范围内的数字",
+        "它会作为 X-User-Id 请求头写入审计字段；空值或超范围会被服务端直接判 400",
+      );
       return;
     }
-    setOperatorId(next);
+    if (!setOperatorId(next)) {
+      toast.error("操作人保存失败", "当前浏览器不允许写入 localStorage");
+      return;
+    }
     setOpen(false);
     void queryClient.invalidateQueries();
     toast.success(`操作人已切换为 #${next}`);
@@ -52,8 +64,11 @@ function OperatorMenu() {
           setValue(getOperatorId());
           setOpen((current) => !current);
         }}
-        className="flex h-8 items-center gap-1.5 rounded-lg border border-line bg-surface pl-1.5 pr-2 text-[12px] font-medium text-ink-soft transition-colors hover:border-line-strong"
+        className="flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface pl-1.5 pr-2 text-[12px] font-medium text-ink-soft transition-colors hover:border-line-strong md:h-8"
         title="请求头 X-User-Id"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={`操作人 #${getOperatorId()}，点击修改`}
       >
         <CircleUser className="size-4 text-muted" strokeWidth={1.7} />
         <span className="tnum">操作人 #{getOperatorId()}</span>
@@ -62,17 +77,24 @@ function OperatorMenu() {
 
       {open && (
         <div className="absolute right-0 top-[calc(100%+6px)] z-40 w-[248px] animate-rise rounded-xl border border-line bg-surface p-3 shadow-float">
-          <p className="text-[12px] font-medium text-ink">操作人 ID</p>
+          <label htmlFor="jobx-operator-id" className="text-[12px] font-medium text-ink">
+            操作人 ID
+          </label>
           <p className="mt-0.5 text-[11px] leading-relaxed text-muted">
             服务端从 <code className="font-mono text-[10.5px]">X-User-Id</code> 取当前用户，
             写入 createrId / updaterId。
           </p>
           <input
+            id="jobx-operator-id"
+            aria-label="操作人 ID"
             value={value}
             onChange={(event) => setValue(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter") save();
+              if (event.key === "Escape") setOpen(false);
             }}
+            autoFocus
+            maxLength={20}
             inputMode="numeric"
             className="mt-2 h-8 w-full rounded-md border border-line bg-surface px-2 font-mono text-[12px] focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/12"
           />
@@ -107,6 +129,7 @@ export function Topbar({ onOpenPalette }: { onOpenPalette: () => void }) {
   const title = TITLES[location.pathname] ?? "调度总览";
 
   return (
+    <>
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-canvas/85 px-4 backdrop-blur-md lg:px-8">
       <div className="md:hidden">
         <Wordmark />
@@ -130,7 +153,8 @@ export function Topbar({ onOpenPalette }: { onOpenPalette: () => void }) {
         <button
           type="button"
           onClick={onOpenPalette}
-          className="flex h-8 items-center gap-2 rounded-lg border border-line bg-surface pl-2 pr-1.5 text-[12px] text-muted transition-colors hover:border-line-strong hover:text-ink-soft"
+          aria-label="搜索或跳转页面"
+          className="flex h-9 items-center gap-2 rounded-lg border border-line bg-surface pl-2 pr-1.5 text-[12px] text-muted transition-colors hover:border-line-strong hover:text-ink-soft md:h-8"
         >
           <Search className="size-3.5" />
           <span className="hidden sm:inline">搜索 / 跳转</span>
@@ -146,7 +170,7 @@ export function Topbar({ onOpenPalette }: { onOpenPalette: () => void }) {
           }}
           title="立即刷新"
           aria-label="立即刷新"
-          className="flex size-8 items-center justify-center rounded-lg border border-line bg-surface text-muted transition-colors hover:border-line-strong hover:text-ink"
+          className="flex size-9 items-center justify-center rounded-lg border border-line bg-surface text-muted transition-colors hover:border-line-strong hover:text-ink md:size-8"
         >
           <RotateCw className={cn("size-3.5", fetching > 0 && "animate-spin text-accent")} />
         </button>
@@ -154,5 +178,31 @@ export function Topbar({ onOpenPalette }: { onOpenPalette: () => void }) {
         <OperatorMenu />
       </div>
     </header>
+
+    {/* 移动端没有侧边栏，用一条可横向滚动的导航补上，触控高度 44px */}
+    <nav
+      aria-label="页面导航"
+      className="sticky top-14 z-20 flex overflow-x-auto border-b border-line bg-canvas/95 px-2 backdrop-blur md:hidden"
+    >
+      {NAV.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          end={"end" in item ? item.end : false}
+          className={({ isActive }) =>
+            cn(
+              "inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap px-3 text-[12.5px] transition-colors",
+              isActive
+                ? "border-b-2 border-accent font-medium text-accent-strong"
+                : "border-b-2 border-transparent text-ink-soft",
+            )
+          }
+        >
+          <item.icon className="size-4 text-muted" strokeWidth={1.8} />
+          {item.label}
+        </NavLink>
+      ))}
+    </nav>
+    </>
   );
 }

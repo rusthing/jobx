@@ -12,14 +12,14 @@ const pad = (value: number, length = 2) => String(value).padStart(length, "0");
 
 export function formatDate(value: TimeInput): string {
   const ms = toMs(value);
-  if (ms === null) return "—";
+  if (ms === null) return "--";
   const d = new Date(ms);
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 export function formatTime(value: TimeInput, withSeconds = true): string {
   const ms = toMs(value);
-  if (ms === null) return "—";
+  if (ms === null) return "--";
   const d = new Date(ms);
   return withSeconds
     ? `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
@@ -28,14 +28,14 @@ export function formatTime(value: TimeInput, withSeconds = true): string {
 
 export function formatDateTime(value: TimeInput, withSeconds = true): string {
   const ms = toMs(value);
-  if (ms === null) return "—";
+  if (ms === null) return "--";
   return `${formatDate(ms)} ${formatTime(ms, withSeconds)}`;
 }
 
 /** 10-21 14:32 —— 表格里用的紧凑格式，同年省略年份 */
 export function formatCompact(value: TimeInput): string {
   const ms = toMs(value);
-  if (ms === null) return "—";
+  if (ms === null) return "--";
   const d = new Date(ms);
   const now = new Date();
   const date =
@@ -48,7 +48,7 @@ export function formatCompact(value: TimeInput): string {
 /** 「3 分钟后」「2 小时前」—— 面向运维的第一读数 */
 export function formatRelative(value: TimeInput, now = Date.now()): string {
   const ms = toMs(value);
-  if (ms === null) return "—";
+  if (ms === null) return "--";
   const delta = ms - now;
   const abs = Math.abs(delta);
 
@@ -74,7 +74,7 @@ export function formatRelative(value: TimeInput, now = Date.now()): string {
 /** 倒计时：< 1 小时显示 mm:ss，否则显示 1h 04m */
 export function formatCountdown(value: TimeInput, now = Date.now()): string {
   const ms = toMs(value);
-  if (ms === null) return "—";
+  if (ms === null) return "--";
   const delta = ms - now;
   if (delta <= 0) return "已到点";
   if (delta >= 86_400_000) return `${Math.floor(delta / 86_400_000)} 天`;
@@ -90,7 +90,8 @@ export function formatCountdown(value: TimeInput, now = Date.now()): string {
 
 export function formatDuration(value: TimeInput): string {
   const ms = toMs(value);
-  if (ms === null) return "—";
+  // 负耗时只可能来自数据异常（结束时刻早于开始），不要显示成 "-3 ms"
+  if (ms === null || ms < 0) return "--";
   if (ms < 1_000) return `${Math.round(ms)} ms`;
   if (ms < 60_000) return `${(ms / 1_000).toFixed(ms < 10_000 ? 2 : 1)} s`;
   if (ms < 3_600_000) {

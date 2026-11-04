@@ -11,6 +11,7 @@ import { useAllGroups, useGroupMutations } from "@/hooks/use-groups";
 import { useAllJobs } from "@/hooks/use-jobs";
 import { setDataMode, type Group } from "@/lib/api";
 import { formatCompact, formatRelative } from "@/lib/time";
+import { shortId } from "@/lib/utils";
 import { useNow } from "@/hooks/use-now";
 
 type Editor = { mode: "new" } | { mode: "edit"; group: Group } | null;
@@ -47,7 +48,14 @@ export function GroupsPage() {
     if (urlNew === "1") {
       setEditor({ mode: "new" });
       setForm(EMPTY_FORM);
-      setSearchParams({}, { replace: true });
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("new");
+          return next;
+        },
+        { replace: true },
+      );
     }
   }, [urlNew, setSearchParams]);
 
@@ -156,7 +164,8 @@ export function GroupsPage() {
               value={keywordInput}
               onChange={(event) => setKeywordInput(event.target.value)}
               placeholder="搜索分组名、备注…"
-              className="h-8 pl-8 text-[12.5px]"
+              aria-label="搜索计划分组"
+              className="h-9 pl-8 text-[12.5px]"
             />
           </div>
           <span className="ml-auto text-[11px] text-muted">
@@ -234,13 +243,15 @@ export function GroupsPage() {
                           <FolderOpen className="size-3.5 shrink-0 text-accent/70" />
                           <span className="truncate">{group.name}</span>
                         </button>
-                        <div className="mt-0.5 font-mono text-[10px] text-muted/80">#{group.id}</div>
+                        <div className="mt-0.5 font-mono text-[10px] text-muted/80" title={group.id}>
+                          #{shortId(group.id)}
+                        </div>
                       </td>
                       <td className="max-w-[280px] px-3 py-2.5">
                         {group.remark ? (
                           <span className="line-clamp-2 text-[12px] text-ink-soft">{group.remark}</span>
                         ) : (
-                          <span className="text-[11.5px] text-muted/70">—</span>
+                          <span className="text-[11.5px] text-muted/70">--</span>
                         )}
                       </td>
                       <td className="px-3 py-2.5">
@@ -323,13 +334,13 @@ export function GroupsPage() {
               autoFocus
             />
           </Field>
-          <Field label="备注" hint="给人看的说明，可为空">
+          <Field label="备注" hint="给人看的说明，可为空，最多 50 字符（与服务端 @len 一致）">
             <Textarea
               value={form.remark}
               onChange={(event) => setForm((prev) => ({ ...prev, remark: event.target.value }))}
               placeholder="例：电商域的同步与对账类计划"
               rows={3}
-              maxLength={200}
+              maxLength={50}
             />
           </Field>
         </div>

@@ -581,12 +581,14 @@ export const mockJobs = {
     await delay(90 + random() * 120);
     const filtered = state.jobs.filter(
       (job) =>
-        matchesKeyword([job.name, job.executorCode, job.remark, job.cron], query.keyword) &&
+        // 后端 like_columns 只配了 executor_code / name / remark，cron 不参与关键字匹配
+        matchesKeyword([job.name, job.executorCode, job.remark], query.keyword) &&
         (query.jobType === undefined || job.jobType === query.jobType) &&
         (query.enabled === undefined || job.enabled === query.enabled) &&
         (query.highFreq === undefined || job.highFreq === query.highFreq) &&
         (!query.groupId || job.groupId === query.groupId) &&
-        (!query.executorCode || job.executorCode === query.executorCode),
+        (!query.executorCode || job.executorCode === query.executorCode) &&
+        (!query.createdAfterMs || Number(job.createMs) >= Number(query.createdAfterMs)),
     );
     return paginate(filtered, query.page, query.size, query.orderBy);
   },
@@ -708,17 +710,23 @@ export const mockJobs = {
 export const mockTasks = {
   async page(query: TaskQuery = {}): Promise<Page<Task>> {
     await delay(90 + random() * 120);
-    const filtered = state.tasks.filter(
-      (task) =>
-        matchesKeyword(
-          [task.id, task.executorCode, task.executorInstance, task.execDetail],
-          query.keyword,
-        ) &&
+    const needle = query.keyword?.trim().toLowerCase() ?? "";
+    const filtered = state.tasks.filter((task) => {
+      // 与 live 层保持同一套语义：纯数字按 ID 精确匹配，其余匹配执行器编码
+      const keywordOk = !needle
+        ? true
+        : /^\d+$/.test(needle)
+          ? task.id === needle
+          : task.executorCode.toLowerCase().includes(needle);
+      return (
+        keywordOk &&
         (query.status === undefined || task.status === query.status) &&
         (query.taskType === undefined || task.taskType === query.taskType) &&
         (!query.executorCode || task.executorCode === query.executorCode) &&
-        (!query.jobId || task.jobId === query.jobId),
-    );
+        (!query.jobId || task.jobId === query.jobId) &&
+        (!query.assignAfterMs || Number(task.assignMs) >= Number(query.assignAfterMs))
+      );
+    });
     return paginate(filtered, query.page, query.size, query.orderBy);
   },
 

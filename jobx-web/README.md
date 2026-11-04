@@ -97,16 +97,18 @@ allowed-headers = ["Content-Type", "X-User-Id"]
 界面按这条链路组织：
 
 - **调度总览**：启用计划数、正在执行、24h 成功率、P95 耗时；按小时的成/败趋势；计划类型构成；即将分派（带倒计时，可直接触发）；最近失败（错误原文来自 `exec_detail`）。
-- **任务计划**：搜索 + 状态/类型/执行器过滤，行内启停、触发、编辑、删除；抽屉里按类型给出不同的调度表单，cron 会实时算「接下来 4 次」。
-- **执行记录**：状态/来源/执行器过滤，5 秒轮询（可关）；详情抽屉给出「分派 → 预计开始 → 开始执行 → 结束」的时间线，每步的间隔都算好了。
+- **任务计划**：搜索 + 状态/类型/执行器/创建时间范围过滤，行内启停、触发、编辑、删除；抽屉里按类型给出不同的调度表单，cron 会实时算「接下来 4 次」。
+- **执行记录**：状态/来源/执行器/分派时间范围过滤，5 秒轮询（可关）；详情抽屉给出「分派 → 预计开始 → 开始执行 → 结束」的时间线，每步的间隔都算好了。
 - **执行器**：每个编码一张卡，计划数、24h 执行量、成功率、平均耗时、24h 活跃度条。
 
 ## 接口约定（照抄后端，不猜）
 
-- 响应统一是 `Ro<T>`：`result` 为 `1` 成功、`-1` 参数错、`-2` 警告、`-3` 失败，业务数据在 `extra`。`http.ts` 统一拆包，非 1 一律抛 `ApiError`。
-- 每个请求必须带 `X-User-Id`（服务端 `get_current_user_id` 缺了直接 400）。顶栏「操作人」就是改这个头，写入 `creater_id` / `updater_id`。
+- 响应统一是 `Ro<T>`：`result` 为 `1` 成功、`-1` 参数错、`-2` 警告、`-3` 失败，业务数据在 `extra`。`http.ts` 统一拆包，非 1 一律抛 `ApiError`；401/403 映射成会话失效/无权限，`-1`/`-3` 在服务端 `msg` 前加固定前缀，缺字段时才退回 `detail`。
+- 每个请求必须带 `X-User-Id`（服务端 `get_current_user_id` 按 u64 解析，缺了/非法直接 400）。顶栏「操作人」只允许 u64 范围内的数字，写入 `creater_id` / `updater_id`。
 - 所有 `u64`（雪花 ID、毫秒时间戳）在 JSON 里是**字符串**——19 位超过 `Number.MAX_SAFE_INTEGER`，前端全程按字符串处理，只在展示时格式化。
-- 分页参数是 `_page`（从 1 起）/ `_size` / `_keyword` / `_orderBy`（`字段:asc|desc`，字段用数据库列名，如 `next_assign_ms:asc`）；响应是 `PageRx`：`{ pageNum, total, list }`。
+- 分页参数是 `_page`（从 1 起）/ `_size` / `_keyword` / `_orderBy`（`字段:asc|desc`，字段用数据库列名，如 `next_assign_ms:asc`）；响应是 `PageRx`：`{ pageNum, total, list }`。前端始终以响应里的 `pageNum` 和 `total` 夹取页码，删除/轮询导致越界时自动回到最后一页。
+- 过滤字段按 Bean Searcher 语法直传：等值 `field=value`，模糊 `field-op=ct`，范围 `field-op=ge`。时间范围在 UI 上是「24 小时 / 7 天 / 30 天」，请求时翻译成 `create_ms-op=ge`（计划）或 `assign_ms-op=ge`（执行记录）。
+- `_keyword` 只对配置了 `like_columns` 的实体生效：计划表匹配 `name` / `executor_code` / `remark`，**cron 不参与**；执行记录表当前没有配置 `like_columns`，因此前端把关键字翻译成「纯数字按 `id` 精确匹配，其余按 `executor_code` 模糊匹配」。后端给 `jobx_task_dao` 补上 `like_columns` 后，这里可以退回 `_keyword`。
 - CRUD 是宏生成的：`GET /jobx/job/page`、`GET /jobx/job/list`、`GET /jobx/job/{id}`、`POST /jobx/job`、`PUT /jobx/job`、`DELETE /jobx/job/{id}`、`POST /jobx/job/trigger`。任务侧同构。
 - 删除计划受外键 `on delete restrict` 保护：有执行记录就删不掉。界面照实提示，并建议改用「停用」，不假装成功。
 
@@ -136,13 +138,16 @@ src/
 │   ├── layout/      # AppShell / Sidebar / Topbar / CommandPalette
 │   ├── charts.tsx   # Sparkline / TrendChart / ActivityStrip（手写 SVG，无图表库）
 │   └── domain.tsx   # 类型徽标、执行器 chip、调度节奏
-└── features/        # overview / jobs / tasks / executors
+└── features/        # overview / jobs / groups / tasks / executors
 ```
+
+展示口径统一在 `src/lib/time.ts`、`src/lib/utils.ts` 和 `src/components/domain.tsx`：空值一律 `--`（不用破折号/空字符串），长 ID 列表内截断并保留完整 `title`，毫秒时间戳按本地时区展示，负数耗时不出负数，24h 成功率在没有已完成样本时显示 `--` 而不是 100%。表格横向滚动时首列固定，键盘用户 Tab 到行后按 Enter/Space 打开详情。
 
 技术栈：React 19 + TypeScript + Vite + Tailwind CSS v4 + TanStack Query。没有 UI 组件库和图表库——面板、抽屉、堆叠柱、命令面板都是本项目自己的代码，样式令牌集中在 `styles.css` 的 `@theme` 里。
 
 ## 已知边界
 
 - 统计是**浏览器侧聚合**（最近 1200 条执行记录）。后端没有统计接口，界面如实标注口径，不把样本当全量。
-- 没有鉴权：`X-User-Id` 由使用者自己填，适合内网运维台；接入统一登录时替换 `getOperatorId()` 即可。
+- 没有登录页：`jobx-svr` 本身没有登录/签发 token 的接口，`X-User-Id` 由使用者自己填，适合内网运维台。请求层已预留统一鉴权：若网关注入 `jobx.auth-token`（sessionStorage 或 localStorage），会自动带 `Authorization: Bearer ...`；收到 401 会清掉该 token 并提示「登录状态已失效」。接入真正的登录服务时替换 `getOperatorId()` / token 写入即可，不需要再改页面。
+- 移动端没有侧边栏，改为顶栏下方的横向页面导航；表格右侧操作区与分页按钮在窄屏下保持 36–44px 的触控高度，首列固定便于横向滑动时定位计划。
 - 轮询而非推送。执行记录页 5s、其余 15s，页面隐藏时 `useNow` 停表、React Query 自动暂停。

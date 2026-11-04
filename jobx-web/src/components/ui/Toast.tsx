@@ -61,10 +61,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={api}>
       {children}
       {createPortal(
-        <div className="pointer-events-none fixed bottom-5 right-5 z-[80] flex w-[340px] flex-col gap-2">
+        <div
+          aria-live="polite"
+          aria-relevant="additions"
+          className="pointer-events-none fixed bottom-5 right-4 z-[80] flex w-[calc(100vw-2rem)] max-w-[340px] flex-col gap-2 sm:right-5"
+        >
           {items.map((item) => (
             <div
               key={item.id}
+              role={item.tone === "error" ? "alert" : "status"}
               className={cn(
                 "pointer-events-auto flex animate-rise items-start gap-2.5 rounded-xl border bg-surface px-3 py-2.5 shadow-float",
                 item.tone === "success" && "border-success/25",
@@ -100,7 +105,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 type="button"
                 aria-label="关闭提示"
                 onClick={() => dismiss(item.id)}
-                className="mt-0.5 text-muted hover:text-ink"
+                className="-mr-1.5 -mt-1 flex size-9 shrink-0 items-center justify-center rounded-md text-muted hover:bg-sunken hover:text-ink"
               >
                 <X className="size-3.5" />
               </button>

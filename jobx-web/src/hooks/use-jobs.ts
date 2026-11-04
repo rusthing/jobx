@@ -81,10 +81,36 @@ export function useJobMutations() {
         validEndMs: job.validEndMs,
         assignLeadMs: job.assignLeadMs,
         streamMaxLen: job.streamMaxLen,
+        taskExpireDuration: job.taskExpireDuration,
         remark: job.remark,
         enabled: !job.enabled,
       }),
-    onSuccess: invalidate,
+    /*
+     * 乐观更新：行内开关是最高频操作，等一个 PUT + 列表重拉再翻面会有明显「点了没反应」。
+     * 先把所有已缓存的列表/详情改成目标状态，失败再整体回滚，成功以服务端为准重拉。
+     */
+    onMutate: async (job) => {
+      await queryClient.cancelQueries({ queryKey: jobKeys.all });
+      const snapshot = queryClient.getQueriesData<Page<Job> | Job[] | Job>({
+        queryKey: jobKeys.all,
+      });
+
+      const flip = <T extends Job>(item: T): T =>
+        item.id === job.id ? { ...item, enabled: !item.enabled } : item;
+
+      queryClient.setQueriesData<Page<Job> | Job[] | Job>({ queryKey: jobKeys.all }, (old) => {
+        if (!old) return old;
+        if (Array.isArray(old)) return old.map(flip);
+        if ("list" in old) return { ...old, list: old.list.map(flip) };
+        return flip(old);
+      });
+
+      return { snapshot };
+    },
+    onError: (_error, _job, context) => {
+      for (const [key, data] of context?.snapshot ?? []) queryClient.setQueryData(key, data);
+    },
+    onSettled: invalidate,
   });
 
   return { create, update, remove, trigger, setEnabled };

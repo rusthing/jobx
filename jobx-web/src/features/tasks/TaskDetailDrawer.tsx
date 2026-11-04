@@ -76,7 +76,7 @@ function Timeline({ task }: { task: Task }) {
                   {step.label}
                 </span>
                 <span className="tnum font-mono text-[11px] text-ink">
-                  {pending ? "—" : formatDateTime(ms)}
+                  {pending ? "--" : formatDateTime(ms)}
                 </span>
               </div>
               <div className="mt-0.5 flex items-center justify-between gap-2 text-[10.5px] text-muted">
@@ -96,7 +96,7 @@ function Timeline({ task }: { task: Task }) {
 
 function CodeBlock({
   value,
-  empty = "—",
+  empty = "--",
   rows = 6,
 }: {
   value: string | null;
@@ -159,7 +159,10 @@ function TaskDetailDrawerImpl({
               <ExecutorChip code={task.executorCode} />
               <JobTypeBadge type={task.jobType} short />
             </div>
-            <p className="mt-1.5 truncate font-mono text-[10.5px] text-muted" title={task.executorInstance ?? ""}>
+            <p
+              className="mt-1.5 truncate font-mono text-[10.5px] text-muted"
+              title={task.executorInstance ?? ""}
+            >
               {task.executorInstance ?? "尚未分配到实例"}
             </p>
           </div>
@@ -167,7 +170,7 @@ function TaskDetailDrawerImpl({
           <div className="rounded-lg border border-line bg-sunken/50 px-3 py-2">
             <p className="text-[10.5px] text-muted">执行耗时</p>
             <p className="tnum mt-0.5 font-mono text-[15px] text-ink">
-              {duration === null ? (task.status === TASK_STATUS.running ? "运行中" : "—") : formatDuration(duration)}
+              {duration === null ? (task.status === TASK_STATUS.running ? "运行中" : "--") : formatDuration(duration)}
             </p>
             <p className="mt-1 text-[10.5px] text-muted">
               {task.scheduledExecStartMs
@@ -241,7 +244,7 @@ function TaskDetailDrawerImpl({
               job_id
             </span>
             <span className="font-mono text-[10.5px] text-ink-soft">
-              {task.jobId ?? "—"}
+              {task.jobId ?? "--"}
               {task.jobId && <CopyButton value={task.jobId} label="复制计划 ID" />}
             </span>
           </div>

@@ -24,23 +24,65 @@ const RAW_API_BASE = (import.meta.env.VITE_API_BASE ?? "").trim();
 
 export const API_BASE = (RAW_API_BASE || "/api").replace(/\/+$/, "");
 
-
 const USER_KEY = "jobx.operator-id";
+const TOKEN_KEY = "jobx.auth-token";
 const DEFAULT_OPERATOR = "1";
+const U64_MAX = 18_446_744_073_709_551_615n;
+
+/** 服务端把 X-User-Id 按 u64 解析，空串/负数/带空格都会被判 400，这里先兜住 */
+function isU64(value: string): boolean {
+  if (!/^\d{1,20}$/.test(value)) return false;
+  try {
+    return BigInt(value) <= U64_MAX;
+  } catch {
+    return false;
+  }
+}
+
+export function isValidOperatorId(id: string): boolean {
+  return isU64(id.trim());
+}
 
 export function getOperatorId(): string {
   try {
-    return localStorage.getItem(USER_KEY) ?? DEFAULT_OPERATOR;
+    const stored = localStorage.getItem(USER_KEY)?.trim() ?? "";
+    return stored && isU64(stored) ? stored : DEFAULT_OPERATOR;
   } catch {
     return DEFAULT_OPERATOR;
   }
 }
 
-export function setOperatorId(id: string) {
+/** 返回是否写入成功：超出 u64 或非数字时不能静默吞掉，UI 要给出明确失败提示 */
+export function setOperatorId(id: string): boolean {
+  const value = id.trim();
+  if (!isU64(value)) return false;
   try {
-    localStorage.setItem(USER_KEY, id);
+    localStorage.setItem(USER_KEY, value);
+    return true;
   } catch {
-    /* 隐私模式下 localStorage 不可写，忽略即可 */
+    // 隐私模式下 localStorage 不可写；调用方仍能继续，但刷新后会回到默认操作人
+    return true;
+  }
+}
+
+/**
+ * 统一登录尚未接入 jobx-svr。若前置网关注入 token，前端会把它作为 Bearer 头带上；
+ * 401 时清掉本地 token，避免继续用一个已经失效的会话打请求。
+ */
+function getAuthToken(): string | null {
+  try {
+    return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+function clearAuthToken() {
+  try {
+    sessionStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* ignore */
   }
 }
 
@@ -61,6 +103,39 @@ export class ApiError extends Error {
   get isNetworkError() {
     return this.status === 0;
   }
+
+  /** 会话失效或无权限：值不值得让用户重试，要区别对待 */
+  get isAuthError() {
+    return this.status === 401 || this.status === 403;
+  }
+
+  /** `result = -2` 是服务端的「业务拒绝」，不是系统故障 */
+  get isWarning() {
+    return this.result === -2;
+  }
+}
+
+const RESULT_PREFIX: Record<number, string> = {
+  [-1]: "参数不合法：",
+  [-2]: "",
+  [-3]: "服务处理失败：",
+};
+
+/** 把 HTTP 状态码 / 业务码翻成值班同学能直接行动的提示 */
+export function describeApiError(
+  status: number,
+  result: number | undefined,
+  msg: string | undefined,
+  detail: string | undefined,
+): string {
+  if (status === 401) return "登录状态已失效，请重新登录后再试";
+  if (status === 403) return "当前操作人没有权限执行该操作";
+  if (status === 404) return msg || detail || "请求的资源不存在";
+  if (status === 429) return "请求过于频繁，请稍后重试";
+  if (status >= 500) return msg || detail || `服务端异常（HTTP ${status}）`;
+
+  const text = msg || detail || "请求失败";
+  return `${RESULT_PREFIX[result ?? 0] ?? ""}${text}`;
 }
 
 type QueryValue = string | number | boolean | null | undefined;
@@ -90,6 +165,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 
   const timeout = AbortSignal.timeout(timeoutMs);
   const composed = signal ? AbortSignal.any([signal, timeout]) : timeout;
+  const token = getAuthToken();
 
   let response: Response;
   try {
@@ -99,6 +175,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       headers: {
         Accept: "application/json",
         "X-User-Id": getOperatorId(),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -111,6 +188,9 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     throw new ApiError(reason, 0);
   }
 
+  if (response.status === 401) clearAuthToken();
+
+  // 204 或网关吞掉响应体时没有 JSON 可拆，此时只能按 HTTP 状态判断
   const text = await response.text();
   let payload: Ro<T> | null = null;
   if (text) {
@@ -122,6 +202,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
 
   if (!payload) {
+    if (response.ok && response.status === 204) return undefined as T;
     // 静态服务器 / 网关把请求兜底成了 HTML：通常是反代没配好，不是业务错误
     throw new ApiError(
       `服务返回了非 JSON 响应（HTTP ${response.status}），检查 ${API_BASE}/jobx/* 是否被反代到 jobx-svr`,
@@ -130,12 +211,17 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
 
   if (!response.ok) {
-    throw new ApiError(payload.msg || `服务返回 ${response.status}`, response.status, payload.result, payload.detail);
+    throw new ApiError(
+      describeApiError(response.status, payload.result, payload.msg, payload.detail),
+      response.status,
+      payload.result,
+      payload.detail,
+    );
   }
 
   if (payload.result !== 1) {
     throw new ApiError(
-      payload.detail || payload.msg || "请求失败",
+      describeApiError(response.status, payload.result, payload.msg, payload.detail),
       response.status,
       payload.result,
       payload.detail,

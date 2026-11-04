@@ -126,6 +126,27 @@
     animation: fade 0.2s ease-out both;
   }
 
+  /*
+   * 表格首列固定：横向滚动时「计划/状态」始终可见。
+   * 背景必须是不透明的，否则滚动内容会透出来；hover 时同步换成 hover 色。
+   */
+  .col-sticky {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--color-surface);
+    box-shadow: 1px 0 0 var(--color-line);
+  }
+
+  thead .col-sticky {
+    z-index: 2;
+    background: color-mix(in srgb, var(--color-sunken) 60%, var(--color-surface));
+  }
+
+  tr:hover > .col-sticky {
+    background: color-mix(in srgb, var(--color-sunken) 50%, var(--color-surface));
+  }
+
   .live-dot::after {
     content: "";
     position: absolute;

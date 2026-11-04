@@ -22,7 +22,8 @@ export function Switch({ checked, onChange, disabled, label, size = "md" }: Swit
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
-        "relative inline-flex shrink-0 items-center rounded-full border transition-colors duration-200",
+        // after 伪元素把可点区域扩到约 44px，视觉尺寸不变
+        "relative inline-flex shrink-0 items-center rounded-full border transition-colors duration-200 after:absolute after:-inset-2 after:content-['']",
         track,
         checked
           ? "border-accent-strong/30 bg-accent"
@@ -73,9 +74,10 @@ export function Segmented<T extends string | number>({
           <button
             key={String(option.value)}
             type="button"
+            aria-pressed={active}
             onClick={() => onChange(option.value)}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-[6px] font-medium transition-colors",
+              "inline-flex min-h-9 items-center gap-1.5 rounded-[6px] font-medium transition-colors md:min-h-0",
               size === "sm" ? "h-6 px-2 text-[12px]" : "h-7 px-2.5 text-[12.5px]",
               active
                 ? "bg-surface text-ink shadow-[0_1px_2px_rgb(25_27_22/0.08)]"

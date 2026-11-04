@@ -7,7 +7,7 @@ import { useOverview } from "@/hooks/use-overview";
 import { useToast } from "@/components/ui/Toast";
 import { Wordmark } from "./Logo";
 
-const NAV = [
+export const NAV = [
   { to: "/", label: "调度总览", icon: LayoutDashboard, end: true },
   { to: "/jobs", label: "任务计划", icon: CalendarClock },
   { to: "/groups", label: "计划分组", icon: FolderOpen },

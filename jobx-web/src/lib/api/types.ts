@@ -149,6 +149,8 @@ export interface JobQuery {
    */
   groupId?: Id;
   highFreq?: boolean;
+  /** 创建时间下界（毫秒时间戳字符串），映射到后端 `create_ms` 的 `ge` 条件 */
+  createdAfterMs?: string;
   orderBy?: string;
   page?: number;
   size?: number;
@@ -174,6 +176,8 @@ export interface TaskQuery {
   taskType?: TaskType;
   executorCode?: string;
   jobId?: Id;
+  /** 分派时间下界（毫秒时间戳字符串），映射到后端 `assign_ms` 的 `ge` 条件 */
+  assignAfterMs?: string;
   orderBy?: string;
   page?: number;
   size?: number;

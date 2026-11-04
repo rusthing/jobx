@@ -86,7 +86,7 @@ export function ExecutorChip({ code, className }: { code: string; className?: st
 /** 调度节奏：cron 原文 + 人话解释；固定间隔直接给时长 */
 export function ScheduleText({ job, dense }: { job: Job; dense?: boolean }) {
   if (job.jobType === JOB_TYPE.manual) {
-    return <span className="text-[12px] text-muted/70">—</span>;
+    return <span className="text-[12px] text-muted/70">--</span>;
   }
 
   if (job.intervalDuration) {
@@ -98,7 +98,7 @@ export function ScheduleText({ job, dense }: { job: Job; dense?: boolean }) {
     );
   }
 
-  if (!job.cron) return <span className="text-[12px] text-muted">—</span>;
+  if (!job.cron) return <span className="text-[12px] text-muted">--</span>;
 
   const hint = describeCron(job.cron);
   return (

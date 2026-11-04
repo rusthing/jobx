@@ -22,10 +22,19 @@ import {
 } from "@/lib/api";
 import { formatCompact, formatDuration, formatRelative, toMs } from "@/lib/time";
 import { isStaleTask } from "@/lib/metrics";
-import { cn } from "@/lib/utils";
+import { cn, shortId } from "@/lib/utils";
 import { TaskDetailDrawer } from "./TaskDetailDrawer";
 
 const PAGE_SIZE = 25;
+
+type TimeRange = "all" | "1h" | "24h" | "7d";
+
+const TIME_RANGES: Array<{ value: TimeRange; label: string; ms?: number }> = [
+  { value: "all", label: "分派时间" },
+  { value: "1h", label: "1 小时内", ms: 3_600_000 },
+  { value: "24h", label: "24 小时内", ms: 24 * 3_600_000 },
+  { value: "7d", label: "7 天内", ms: 7 * 24 * 3_600_000 },
+];
 
 export function TasksPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -41,13 +50,32 @@ export function TasksPage() {
   });
   const [taskType, setTaskType] = useState<TaskType | "all">("all");
   const [executor, setExecutor] = useState("all");
+  const [range, setRange] = useState<TimeRange>("all");
+  const [rangeStart, setRangeStart] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [auto, setAuto] = useState(true);
   const [selected, setSelected] = useState<Task | null>(null);
 
-  // 深链参数只用来初始化一次，随后清掉，避免地址栏与控件脱节
+  const changeRange = (next: TimeRange) => {
+    setRange(next);
+    const span = TIME_RANGES.find((item) => item.value === next)?.ms;
+    setRangeStart(span ? Date.now() - span : null);
+    setPage(1);
+  };
+
+  // 深链参数消费后只删除 status，避免把同时存在的其它参数（如 job）一并冲掉
   useEffect(() => {
-    if (searchParams.has("status")) setSearchParams({}, { replace: true });
+    if (!searchParams.has("status")) return;
+    const raw = Number(searchParams.get("status"));
+    if (raw === 0 || raw === 1 || raw === 2) setStatus(raw as TaskStatus);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("status");
+        return next;
+      },
+      { replace: true },
+    );
   }, [searchParams, setSearchParams]);
 
   const query = useMemo(
@@ -56,11 +84,13 @@ export function TasksPage() {
       status: status === "all" ? undefined : status,
       taskType: taskType === "all" ? undefined : taskType,
       executorCode: executor === "all" ? undefined : executor,
+      // 时间基准在切换时固定，自动刷新不会让窗口一直向前滑动
+      assignAfterMs: rangeStart ? String(rangeStart) : undefined,
       page,
       size: PAGE_SIZE,
       orderBy: "assign_ms:desc",
     }),
-    [keyword, status, taskType, executor, page],
+    [keyword, status, taskType, executor, rangeStart, page],
   );
 
   const { data, isLoading, isFetching, error, refetch, dataUpdatedAt } = useTasksPage(query, {
@@ -80,8 +110,18 @@ export function TasksPage() {
   );
 
   const total = Number(data?.total ?? 0);
-  const pageNum = Number(data?.pageNum ?? 1);
+  const pageNum = Number(data?.pageNum ?? page);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  // 自动刷新会把「最后一页的最后几条」刷走，页码可能越界；夹回有效范围避免空白页
+  useEffect(() => {
+    if (!data) return;
+    const pages = Math.max(1, Math.ceil(Number(data.total) / PAGE_SIZE));
+    if (page > pages) setPage(pages);
+  }, [data, page]);
+
+  const filtered =
+    keyword || status !== "all" || taskType !== "all" || executor !== "all" || range !== "all";
 
   const openDetail = (task: Task) => setSelected(task);
   // 抽屉是 memo 化的，onClose 必须是稳定引用（页面每秒会 tick 一次）
@@ -141,8 +181,9 @@ export function TasksPage() {
                 setKeywordInput(event.target.value);
                 setPage(1);
               }}
-              placeholder="搜索执行 ID、执行器、实例、详情…"
-              className="h-8 pl-8 text-[12.5px]"
+              placeholder="搜索执行 ID 或执行器编码…"
+              aria-label="搜索执行记录"
+              className="h-9 pl-8 text-[12.5px]"
             />
           </div>
 
@@ -169,7 +210,7 @@ export function TasksPage() {
               );
               setPage(1);
             }}
-            className="h-8 w-[118px] text-[12.5px]"
+            className="h-9 w-[118px] text-[12.5px]"
           >
             <option value="all">全部来源</option>
             <option value={TASK_TYPE.immediate}>立即执行</option>
@@ -182,12 +223,25 @@ export function TasksPage() {
               setExecutor(event.target.value);
               setPage(1);
             }}
-            className="h-8 w-[142px] font-mono text-[12px]"
+            className="h-9 w-[142px] font-mono text-[12px]"
           >
             <option value="all">全部执行器</option>
             {executors.map((code) => (
               <option key={code} value={code}>
                 {code}
+              </option>
+            ))}
+          </Select>
+
+          <Select
+            value={range}
+            onChange={(event) => changeRange(event.target.value as TimeRange)}
+            className="h-9 w-[118px] text-[12.5px]"
+            aria-label="按分派时间筛选"
+          >
+            {TIME_RANGES.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
               </option>
             ))}
           </Select>
@@ -219,16 +273,23 @@ export function TasksPage() {
           <PanelState
             icon={<Activity className="size-4" />}
             title="没有执行记录"
-            description="调度器还没有分派过任务，或当前筛选条件下没有匹配项。"
+            description={
+              filtered
+                ? "当前筛选条件下没有匹配的执行记录，换个条件或清空筛选再试。"
+                : "调度器还没有分派过任务。"
+            }
             action={
-              status !== "all" || keyword ? (
+              filtered ? (
                 <Button
                   size="sm"
                   onClick={() => {
                     setStatus("all");
                     setTaskType("all");
                     setExecutor("all");
+                    setRange("all");
+                    setRangeStart(null);
                     setKeywordInput("");
+                    setPage(1);
                   }}
                 >
                   清空筛选
@@ -237,11 +298,16 @@ export function TasksPage() {
             }
           />
         ) : (
-          <div className="overflow-x-auto">
+          <div
+            className="overflow-x-auto"
+            tabIndex={0}
+            role="region"
+            aria-label="执行记录表格，可横向滚动"
+          >
             <table className="w-full min-w-[940px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-line bg-sunken/60 text-[11px] text-muted">
-                  <th className="px-4 py-2 font-medium">状态</th>
+                  <th className="col-sticky px-4 py-2 font-medium">状态</th>
                   <th className="px-3 py-2 font-medium">任务计划</th>
                   <th className="px-3 py-2 font-medium">执行器</th>
                   <th className="px-3 py-2 text-right font-medium">分派时间</th>
@@ -262,19 +328,34 @@ export function TasksPage() {
                   return (
                     <tr
                       key={task.id}
+                      tabIndex={0}
+                      aria-label={`查看执行记录 ${task.id} 的详情`}
                       onClick={() => openDetail(task)}
-                      className="cursor-pointer transition-colors hover:bg-sunken/50"
+                      onKeyDown={(event) => {
+                        // 行内的详情按钮自己会处理键盘，避免 Space/Enter 被行再拦一次
+                        if (event.target !== event.currentTarget) return;
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          openDetail(task);
+                        }
+                      }}
+                      className="cursor-pointer transition-colors hover:bg-sunken/50 focus-visible:bg-sunken/50"
                     >
-                      <td className="px-4 py-2.5">
+                      <td className="col-sticky px-4 py-2.5">
                         <StatusBadge task={task} />
                       </td>
 
                       <td className="max-w-[240px] px-3 py-2.5">
                         <div className="truncate text-[12.5px] font-medium text-ink">
-                          {job?.name ?? (task.jobId ? `#${task.jobId}` : "— 未关联计划")}
+                          {job?.name ??
+                            (task.jobId ? (
+                              <span title={task.jobId}>#{shortId(task.jobId)}</span>
+                            ) : (
+                              "-- 未关联计划"
+                            ))}
                         </div>
                         <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[10px] text-muted">
-                          <span>#{task.id}</span>
+                          <span title={task.id}>#{shortId(task.id)}</span>
                           <span className="text-line-strong">·</span>
                           <span>{task.taskType === TASK_TYPE.immediate ? "立即" : "计划"}</span>
                         </div>
@@ -300,7 +381,7 @@ export function TasksPage() {
 
                       <td className="px-3 py-2.5 text-right">
                         <div className="tnum text-[11.5px] text-ink-soft">
-                          {start === null ? "—" : formatCompact(start)}
+                          {start === null ? "--" : formatCompact(start)}
                         </div>
                         {task.scheduledExecStartMs && (
                           <div className="text-[10px] text-muted">
@@ -333,7 +414,7 @@ export function TasksPage() {
                                 : "待执行"
                               : start !== null
                                 ? formatDuration(now - start)
-                                : "—"}
+                                : "--"}
                         </span>
                       </td>
 
@@ -368,7 +449,12 @@ export function TasksPage() {
               ) : null}
             </span>
             <div className="flex items-center gap-1.5">
-              <Button size="xs" disabled={pageNum <= 1} onClick={() => setPage(pageNum - 1)}>
+              <Button
+                size="xs"
+                className="min-h-9 md:min-h-0"
+                disabled={pageNum <= 1}
+                onClick={() => setPage(pageNum - 1)}
+              >
                 上一页
               </Button>
               <span className="tnum px-1 font-mono text-[11px] text-ink-soft">
@@ -376,6 +462,7 @@ export function TasksPage() {
               </span>
               <Button
                 size="xs"
+                className="min-h-9 md:min-h-0"
                 disabled={pageNum >= totalPages}
                 onClick={() => setPage(pageNum + 1)}
               >

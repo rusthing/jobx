@@ -66,12 +66,22 @@ export function ExecutorsPage() {
 
   const executors = data.executors;
   const totalTasks = executors.reduce((acc, item) => acc + item.tasks24h, 0);
-  const weightedRate = executors.length
+  const weightedRate = totalTasks
     ? Math.round(
-        executors.reduce((acc, item) => acc + item.successRate * item.tasks24h, 0) /
-          Math.max(1, totalTasks),
+        executors.reduce(
+          (acc, item) => acc + (item.successRate ?? 0) * item.tasks24h,
+          0,
+        ) / totalTasks,
       )
-    : 100;
+    : null;
+  const weightedTone =
+    weightedRate === null
+      ? "default"
+      : weightedRate >= 98
+        ? "success"
+        : weightedRate >= 90
+          ? "warn"
+          : "danger";
 
   return (
     <>
@@ -102,9 +112,9 @@ export function ExecutorsPage() {
         />
         <StatCard
           label="整体成功率"
-          value={weightedRate}
-          suffix="%"
-          accent={weightedRate >= 98 ? "success" : weightedRate >= 90 ? "warn" : "danger"}
+          value={weightedRate ?? "--"}
+          suffix={weightedRate === null ? undefined : "%"}
+          accent={weightedTone}
           icon={<Gauge className="size-3.5" />}
           footer={`按执行量加权 · 失败 ${data.failed24h} 条`}
         />
@@ -131,12 +141,15 @@ export function ExecutorsPage() {
           {executors.map((executor) => {
             const active =
               executor.lastActivityMs !== null && now - executor.lastActivityMs < 10 * 60_000;
+            const rate = executor.successRate;
             const rateTone =
-              executor.successRate >= 95
-                ? "bg-success"
-                : executor.successRate >= 90
-                  ? "bg-warn"
-                  : "bg-danger";
+              rate === null
+                ? "bg-muted/40"
+                : rate >= 95
+                  ? "bg-success"
+                  : rate >= 90
+                    ? "bg-warn"
+                    : "bg-danger";
 
             return (
               <Panel key={executor.code} className="flex flex-col">
@@ -198,7 +211,7 @@ export function ExecutorsPage() {
                   <div className="flex items-baseline justify-between">
                     <span className="text-[10.5px] text-muted">成功率</span>
                     <span className="tnum font-mono text-[11.5px] text-ink">
-                      {executor.successRate}%
+                      {rate === null ? "--" : `${rate}%`}
                       {executor.failed24h > 0 && (
                         <span className="ml-1 text-danger">· {executor.failed24h} 失败</span>
                       )}
@@ -207,12 +220,12 @@ export function ExecutorsPage() {
                   <div className="mt-1.5 flex h-1.5 overflow-hidden rounded-full bg-sunken">
                     <div
                       className={cn("h-full", rateTone)}
-                      style={{ width: `${executor.successRate}%` }}
+                      style={{ width: `${rate ?? 0}%` }}
                     />
-                    {executor.successRate < 100 && (
+                    {rate !== null && rate < 100 && (
                       <div
                         className="h-full bg-danger/70"
-                        style={{ width: `${100 - executor.successRate}%` }}
+                        style={{ width: `${100 - rate}%` }}
                       />
                     )}
                   </div>

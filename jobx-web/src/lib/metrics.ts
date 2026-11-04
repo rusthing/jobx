@@ -45,7 +45,8 @@ export interface ExecutorStat {
   tasks24h: number;
   running: number;
   failed24h: number;
-  successRate: number;
+  /** 没有已完成样本时为 null，展示成 `--` 而不是假的 100% */
+  successRate: number | null;
   lastActivityMs: number | null;
   avgDurationMs: number | null;
 }
@@ -63,7 +64,7 @@ export interface Overview {
   success24h: number;
   failed24h: number;
   completed24h: number;
-  successRate: number;
+  successRate: number | null;
   avgDurationMs: number | null;
   p95DurationMs: number | null;
   upcoming: Job[];
@@ -159,7 +160,7 @@ export function computeOverview(jobs: Job[], tasks: Task[], now = Date.now()): O
         tasks24h: 0,
         running: 0,
         failed24h: 0,
-        successRate: 0,
+        successRate: null,
         lastActivityMs: null,
         avgDurationMs: null,
       };
@@ -198,7 +199,7 @@ export function computeOverview(jobs: Job[], tasks: Task[], now = Date.now()): O
 
   for (const stat of executorMap.values()) {
     const done = stat.tasks24h - stat.running;
-    stat.successRate = done > 0 ? Math.round(((done - stat.failed24h) / done) * 100) : 100;
+    stat.successRate = done > 0 ? Math.round(((done - stat.failed24h) / done) * 100) : null;
     const list = durationsByExecutor.get(stat.code) ?? [];
     stat.avgDurationMs = list.length
       ? Math.round(list.reduce((acc, value) => acc + value, 0) / list.length)
@@ -221,7 +222,7 @@ export function computeOverview(jobs: Job[], tasks: Task[], now = Date.now()): O
     success24h,
     failed24h,
     completed24h: completed.length,
-    successRate: completed.length > 0 ? Math.round((success24h / completed.length) * 100) : 100,
+    successRate: completed.length > 0 ? Math.round((success24h / completed.length) * 100) : null,
     avgDurationMs: durations.length
       ? Math.round(durations.reduce((acc, value) => acc + value, 0) / durations.length)
       : null,

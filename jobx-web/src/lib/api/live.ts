@@ -26,11 +26,59 @@ function pageQuery(query: JobQuery | TaskQuery | GroupQuery) {
   return { ...rest, _page: page, _size: size, _keyword: keyword, _orderBy: orderBy };
 }
 
+/**
+ * 时间范围用 Bean Searcher 的字段条件表达：`create_ms-op=ge&create_ms=<ms>`。
+ * 前端的 `createdAfterMs` / `assignAfterMs` 是语义化命名，不能原样发给后端。
+ */
+function withTimeFilters(
+  query: JobQuery | TaskQuery,
+): { rest: Record<string, unknown>; page: number; size: number; orderBy?: string } {
+  const { page = 1, size = 20, orderBy, createdAfterMs, assignAfterMs, ...rest } =
+    query as QueryRecord & { createdAfterMs?: string; assignAfterMs?: string };
+  const filters: Record<string, unknown> = { ...rest };
+  if (createdAfterMs) {
+    filters["create_ms-op"] = "ge";
+    filters.create_ms = createdAfterMs;
+  }
+  if (assignAfterMs) {
+    filters["assign_ms-op"] = "ge";
+    filters.assign_ms = assignAfterMs;
+  }
+  return { rest: filters, page, size, orderBy };
+}
+
+function jobQuery(query: JobQuery) {
+  const { rest, page, size, orderBy } = withTimeFilters(query);
+  const { keyword: rawKeyword, ...filters } = rest;
+  const keyword = typeof rawKeyword === "string" ? rawKeyword : undefined;
+  return { ...filters, _page: page, _size: size, _keyword: keyword, _orderBy: orderBy };
+}
+
+/**
+ * jobx_task 的 DAO 没有配置 `like_columns`，所以 `_keyword` 对任务列表是空操作
+ * （服务端不会报错，但也不会过滤）。在前端把「执行 ID / 执行器」的关键字翻译成
+ * 真实可用的字段条件：纯数字按 ID 精确匹配，其余按执行器编码模糊匹配。
+ * 后端补上 `like_columns` 后，这里可以退回 `_keyword`。
+ */
+function taskQuery(query: TaskQuery) {
+  const { rest, page, size, orderBy } = withTimeFilters(query);
+  const { keyword, ...filters } = rest;
+  const needle = typeof keyword === "string" ? keyword.trim() : "";
+  if (needle) {
+    if (/^\d+$/.test(needle)) filters.id = needle;
+    else {
+      filters["executor_code-op"] = "ct";
+      filters.executor_code = needle;
+    }
+  }
+  return { ...filters, _page: page, _size: size, _orderBy: orderBy };
+}
+
 export const liveJobs = {
-  page: (query: JobQuery) => request<Page<Job>>("/jobx/job/page", { query: pageQuery(query) }),
+  page: (query: JobQuery) => request<Page<Job>>("/jobx/job/page", { query: jobQuery(query) }),
 
   list: async (query: JobQuery = {}): Promise<Job[]> =>
-    (await request<Job[]>("/jobx/job/list", { query: pageQuery(query) })) ?? [],
+    (await request<Job[]>("/jobx/job/list", { query: jobQuery(query) })) ?? [],
 
   get: (id: string) => request<Job>(`/jobx/job/${id}`),
 
@@ -47,10 +95,10 @@ export const liveJobs = {
 };
 
 export const liveTasks = {
-  page: (query: TaskQuery) => request<Page<Task>>("/jobx/task/page", { query: pageQuery(query) }),
+  page: (query: TaskQuery) => request<Page<Task>>("/jobx/task/page", { query: taskQuery(query) }),
 
   list: async (query: TaskQuery = {}): Promise<Task[]> =>
-    (await request<Task[]>("/jobx/task/list", { query: pageQuery(query) })) ?? [],
+    (await request<Task[]>("/jobx/task/list", { query: taskQuery(query) })) ?? [],
 
   get: (id: string) => request<Task>(`/jobx/task/${id}`),
 

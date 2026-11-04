@@ -36,7 +36,7 @@ export function jsonError(value: string | null | undefined): string | null {
 
 /** 19 位雪花 ID 的展示形式：头 6 位 … 尾 4 位 */
 export function shortId(id: string | null | undefined): string {
-  if (!id) return "—";
+  if (!id) return "--";
   if (id.length <= 10) return id;
   return `${id.slice(0, 6)}…${id.slice(-4)}`;
 }
