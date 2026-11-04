@@ -10,6 +10,7 @@
 create table jobx_job (
    id                   INT8                 not null,
    name                 VARCHAR(50)          not null,
+   group_id             INT8                 null,
    params               VARCHAR(800)         null,
    job_type             INT2                 not null,
    high_freq            BOOL                 null default false,
@@ -41,6 +42,10 @@ comment on column jobx_job.id is
 comment on column jobx_job.name is
 '名称
 @len 1..=50';
+
+comment on column jobx_job.group_id is
+'任务分组ID
+为空表示未分组';
 
 comment on column jobx_job.params is
 '参数
@@ -118,6 +123,13 @@ comment on column jobx_job.update_ms is
 /*==============================================================*/
 create unique index jobx_job_PK on jobx_job (
 id
+);
+
+/*==============================================================*/
+/* Index: Relationship_2_FK                                     */
+/*==============================================================*/
+create  index Relationship_2_FK on jobx_job (
+group_id
 );
 
 /*==============================================================*/
@@ -246,9 +258,57 @@ comment on column jobx_task.update_ms is
 '更新时间戳';
 
 /*==============================================================*/
+/* Table: jobx_group                                            */
+/*==============================================================*/
+create table jobx_group (
+   id                   INT8                 not null,
+   name                 VARCHAR(50)          not null,
+   remark               VARCHAR(50)          null,
+   creater_id           INT8                 not null,
+   create_ms            INT8                 not null,
+   updater_id           INT8                 not null,
+   update_ms            INT8                 not null,
+   constraint PK_JOBX_GROUP primary key (id),
+   constraint AK_NAME_JOBX_GROUP unique (name)
+);
+
+comment on table jobx_group is
+'任务分组';
+
+comment on column jobx_group.id is
+'ID';
+
+comment on column jobx_group.name is
+'名称
+@len 1..=50';
+
+comment on column jobx_group.remark is
+'备注
+@len 0..=50';
+
+comment on column jobx_group.creater_id is
+'创建者ID';
+
+comment on column jobx_group.create_ms is
+'创建时间戳';
+
+comment on column jobx_group.updater_id is
+'更新者ID';
+
+comment on column jobx_group.update_ms is
+'更新时间戳';
+
+/*==============================================================*/
 /* Index: jobx_task_PK                                          */
 /*==============================================================*/
 create unique index jobx_task_PK on jobx_task (
+id
+);
+
+/*==============================================================*/
+/* Index: jobx_group_PK                                         */
+/*==============================================================*/
+create unique index jobx_group_PK on jobx_group (
 id
 );
 
@@ -262,4 +322,9 @@ job_id
 alter table jobx_task
    add constraint fk_job_id__from__jobx_job foreign key (job_id)
       references jobx_job (id)
+      on delete restrict on update restrict;
+
+alter table jobx_job
+   add constraint fk_group_id__from__jobx_group foreign key (group_id)
+      references jobx_group (id)
       on delete restrict on update restrict;

@@ -7,7 +7,7 @@
 -- 只放**逻辑模型（ldm / pdm）表达不了的索引**：部分索引（带 where 谓词）、
 -- 表达式索引、以及其它 PD 的 Index 定义覆盖不到的形态。
 --
--- ## 为什么不写进 create-table.sql
+-- ## 为什么不写进 init-create-table.sql
 --
 -- 那份文件与 PowerDesigner 导出的 model/create-table-pgsql.sql **逐字节一致**，
 -- 手改会在下次「重新导出 DDL」时被静默覆盖，于是索引在开发库上有、在新环境上
