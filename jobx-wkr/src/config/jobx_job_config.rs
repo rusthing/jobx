@@ -25,11 +25,13 @@ use wheel_rs::serde::duration_option_serde;
 ///
 /// 若将来要换成真实的管理员账号，只改这一行即可。
 ///
-/// ## 为什么不暴露 `group_id`
+/// ## 为什么配置里不暴露 `group_id`
 ///
-/// 分组是给人看的归类维度（列表怎么摆、谁负责哪批计划），由后台维护；执行器在配置里
-/// 声明一批计划时并不知道（也不该关心）它们归到哪个组。因此 `group_id` 走 ghost 恒为
-/// `None`，注册出来的计划初始是「未分组」，要归类时在后台改。
+/// 分组是给人看的归类维度（列表怎么摆、谁负责哪批计划），与执行器、调度周期正交；
+/// 执行器在配置里声明计划时用**分组名称**而不是 ID。所以 `group_id` 在这里走 ghost
+/// 恒为 `None`，注册流程先用 [`crate::ensure_job_group`] 把名称解析成分组 ID，
+/// 再给 `JobxJobAddDto::group_id` 赋值；计划已存在时用
+/// [`crate::ensure_existing_job_group`] 补齐仍为空的分组。
 #[derive(o2o::o2o, Debug, Clone, Serialize, Deserialize, Setters, TypedBuilder)]
 #[owned_into(jobx_api::dto::JobxJobAddDto)]
 #[ghosts(
