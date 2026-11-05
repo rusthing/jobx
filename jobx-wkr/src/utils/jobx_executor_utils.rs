@@ -233,11 +233,11 @@ fn build_task_add_dto(job: &JobxJobVo, instance_id: String, user_id: U64) -> Job
 ///
 /// #[async_trait]
 /// impl JobxTaskHandler for MyHandler {
-///     async fn handle(&self, task: &JobxTaskVo) -> Result<String> {
+///     async fn handle(&self, task: &JobxTaskVo) -> anyhow::Result<String> {
 ///         // task 包含任务的所有信息：executor_code、exec_params、job_type、task_id 等
 ///         // 下游客户端根据 task 信息执行具体业务逻辑
 ///         // 返回 Err 表示任务执行失败，错误信息将被记录
-///         Ok(())
+///         Ok("执行成功".to_string())
 ///     }
 /// }
 /// ```
@@ -245,7 +245,7 @@ fn build_task_add_dto(job: &JobxJobVo, instance_id: String, user_id: U64) -> Job
 pub trait JobxTaskHandler: Send + Sync + 'static {
     /// 处理任务
     /// - task: 任务视图对象，包含 executor_code、exec_params、job_type、task_id 等完整字段
-    /// - 返回 `Ok(())` 表示执行成功，`Err` 表示执行失败
+    /// - 返回 `Ok(String)` 表示执行成功（字符串作为执行结果），`Err` 表示执行失败
     async fn handle(&self, task: &JobxTaskVo) -> Result<String>;
 }
 
