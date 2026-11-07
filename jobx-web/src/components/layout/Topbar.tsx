@@ -1,16 +1,11 @@
-import { useEffect, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, CircleUser, Command, RotateCw, Search } from "lucide-react";
+import { CircleUser, Command, LogOut, RotateCw, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/time";
-import {
-  getOperatorId,
-  isValidOperatorId,
-  setOperatorId,
-} from "@/lib/api/http";
+import { getOperatorId } from "@/lib/api/http";
+import { logoutRemote, notifySessionExpired } from "@/lib/auth-core";
 import { useNow } from "@/hooks/use-now";
-import { useToast } from "@/components/ui/Toast";
 import { Wordmark } from "./Logo";
 import { NAV } from "./Sidebar";
 
@@ -22,100 +17,30 @@ const TITLES: Record<string, string> = {
   "/executors": "执行器",
 };
 
-function OperatorMenu() {
-  const [open, setOpen] = useState(false);
-  const [value, setValue] = useState(() => getOperatorId());
-  const boxRef = useRef<HTMLDivElement>(null);
-  const toast = useToast();
-  const queryClient = useQueryClient();
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (event: MouseEvent) => {
-      if (!boxRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [open]);
-
-  const save = () => {
-    const next = value.trim();
-    if (!/^\d+$/.test(next) || !isValidOperatorId(next)) {
-      toast.error(
-        "操作人 ID 必须是 u64 范围内的数字",
-        "它会作为 X-User-Id 请求头写入审计字段；空值或超范围会被服务端直接判 400",
-      );
-      return;
-    }
-    if (!setOperatorId(next)) {
-      toast.error("操作人保存失败", "当前浏览器不允许写入 localStorage");
-      return;
-    }
-    setOpen(false);
-    void queryClient.invalidateQueries();
-    toast.success(`操作人已切换为 #${next}`);
-  };
-
+/** 操作人只读展示 + 退出登录；身份来自统一会话，不再允许手改 X-User-Id */
+function OperatorBadge() {
+  const operatorId = getOperatorId();
   return (
-    <div className="relative" ref={boxRef}>
+    <div className="flex items-center gap-1">
+      <span
+        className="flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface pl-1.5 pr-2 text-[12px] font-medium text-ink-soft md:h-8"
+        title="当前登录用户（来自统一登录态）"
+      >
+        <CircleUser className="size-4 text-muted" strokeWidth={1.7} />
+        <span className="tnum">操作人 #{operatorId}</span>
+      </span>
       <button
         type="button"
         onClick={() => {
-          setValue(getOperatorId());
-          setOpen((current) => !current);
+          void logoutRemote().finally(notifySessionExpired);
         }}
-        className="flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface pl-1.5 pr-2 text-[12px] font-medium text-ink-soft transition-colors hover:border-line-strong md:h-8"
-        title="请求头 X-User-Id"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-label={`操作人 #${getOperatorId()}，点击修改`}
+        title="退出登录"
+        aria-label="退出登录"
+        className="flex h-9 items-center gap-1 rounded-lg border border-line bg-surface px-2 text-[12px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink md:h-8"
       >
-        <CircleUser className="size-4 text-muted" strokeWidth={1.7} />
-        <span className="tnum">操作人 #{getOperatorId()}</span>
-        <ChevronDown className="size-3 text-muted" />
+        <LogOut className="size-3.5 text-muted" strokeWidth={1.7} />
+        <span className="hidden sm:inline">退出</span>
       </button>
-
-      {open && (
-        <div className="absolute right-0 top-[calc(100%+6px)] z-40 w-[248px] animate-rise rounded-xl border border-line bg-surface p-3 shadow-float">
-          <label htmlFor="jobx-operator-id" className="text-[12px] font-medium text-ink">
-            操作人 ID
-          </label>
-          <p className="mt-0.5 text-[11px] leading-relaxed text-muted">
-            服务端从 <code className="font-mono text-[10.5px]">X-User-Id</code> 取当前用户，
-            写入 createrId / updaterId。
-          </p>
-          <input
-            id="jobx-operator-id"
-            aria-label="操作人 ID"
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") save();
-              if (event.key === "Escape") setOpen(false);
-            }}
-            autoFocus
-            maxLength={20}
-            inputMode="numeric"
-            className="mt-2 h-8 w-full rounded-md border border-line bg-surface px-2 font-mono text-[12px] focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/12"
-          />
-          <div className="mt-2 flex justify-end gap-1.5">
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="h-7 rounded-md px-2 text-[12px] text-muted hover:text-ink"
-            >
-              取消
-            </button>
-            <button
-              type="button"
-              onClick={save}
-              className="h-7 rounded-md bg-accent px-2.5 text-[12px] font-medium text-white hover:bg-accent-strong"
-            >
-              保存
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -175,7 +100,7 @@ export function Topbar({ onOpenPalette }: { onOpenPalette: () => void }) {
           <RotateCw className={cn("size-3.5", fetching > 0 && "animate-spin text-accent")} />
         </button>
 
-        <OperatorMenu />
+        <OperatorBadge />
       </div>
     </header>
 

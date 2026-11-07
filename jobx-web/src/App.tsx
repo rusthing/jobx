@@ -1,10 +1,12 @@
 import { useEffect } from "react";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { BrowserRouter, HashRouter, Navigate, Route, Routes } from "react-router-dom";
+import { AuthGate } from "@/auth/AuthGate";
 import { AppShell } from "@/components/layout/AppShell";
 import { ToastProvider } from "@/components/ui/Toast";
 import { subscribeDataMode } from "@/lib/api";
 import { OverviewPage } from "@/features/overview/OverviewPage";
+import LoginPage from "@/pages/login";
 import { JobsPage } from "@/features/jobs/JobsPage";
 import { GroupsPage } from "@/features/groups/GroupsPage";
 import { TasksPage } from "@/features/tasks/TasksPage";
@@ -59,7 +61,8 @@ export default function App() {
         <Router basename={BASENAME || undefined}>
           <DataModeBridge />
           <Routes>
-            <Route element={<AppShell />}>
+            <Route path="login" element={<LoginPage />} />
+            <Route element={<AuthGate><AppShell /></AuthGate>}>
               <Route index element={<OverviewPage />} />
               <Route path="jobs" element={<JobsPage />} />
               <Route path="groups" element={<GroupsPage />} />

@@ -4,6 +4,8 @@
  * 这两件事在这里一次性处理掉，业务层只拿 `extra`。
  */
 
+import { authHeaders, handleUnauthorized, readSession } from "../auth-core";
+
 export interface Ro<T> {
   result: 1 | -1 | -2 | -3;
   msg: string;
@@ -24,66 +26,13 @@ const RAW_API_BASE = (import.meta.env.VITE_API_BASE ?? "").trim();
 
 export const API_BASE = (RAW_API_BASE || "/api").replace(/\/+$/, "");
 
-const USER_KEY = "jobx.operator-id";
-const TOKEN_KEY = "jobx.auth-token";
-const DEFAULT_OPERATOR = "1";
-const U64_MAX = 18_446_744_073_709_551_615n;
-
-/** 服务端把 X-User-Id 按 u64 解析，空串/负数/带空格都会被判 400，这里先兜住 */
-function isU64(value: string): boolean {
-  if (!/^\d{1,20}$/.test(value)) return false;
-  try {
-    return BigInt(value) <= U64_MAX;
-  } catch {
-    return false;
-  }
-}
-
-export function isValidOperatorId(id: string): boolean {
-  return isU64(id.trim());
-}
-
-export function getOperatorId(): string {
-  try {
-    const stored = localStorage.getItem(USER_KEY)?.trim() ?? "";
-    return stored && isU64(stored) ? stored : DEFAULT_OPERATOR;
-  } catch {
-    return DEFAULT_OPERATOR;
-  }
-}
-
-/** 返回是否写入成功：超出 u64 或非数字时不能静默吞掉，UI 要给出明确失败提示 */
-export function setOperatorId(id: string): boolean {
-  const value = id.trim();
-  if (!isU64(value)) return false;
-  try {
-    localStorage.setItem(USER_KEY, value);
-    return true;
-  } catch {
-    // 隐私模式下 localStorage 不可写；调用方仍能继续，但刷新后会回到默认操作人
-    return true;
-  }
-}
-
 /**
- * 统一登录尚未接入 jobx-svr。若前置网关注入 token，前端会把它作为 Bearer 头带上；
- * 401 时清掉本地 token，避免继续用一个已经失效的会话打请求。
+ * 当前操作人固定来自统一登录态：required 模式是令牌里的用户，
+ * disabled 模式是系统账号 0；界面不再允许手工改 X-User-Id。
  */
-function getAuthToken(): string | null {
-  try {
-    return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || null;
-  } catch {
-    return null;
-  }
-}
-
-function clearAuthToken() {
-  try {
-    sessionStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(TOKEN_KEY);
-  } catch {
-    /* ignore */
-  }
+export function getOperatorId(): string {
+  const session = readSession();
+  return session ? String(session.userId) : "0";
 }
 
 export class ApiError extends Error {
@@ -165,7 +114,6 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 
   const timeout = AbortSignal.timeout(timeoutMs);
   const composed = signal ? AbortSignal.any([signal, timeout]) : timeout;
-  const token = getAuthToken();
 
   let response: Response;
   try {
@@ -174,8 +122,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       signal: composed,
       headers: {
         Accept: "application/json",
-        "X-User-Id": getOperatorId(),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...authHeaders(),
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -188,7 +135,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     throw new ApiError(reason, 0);
   }
 
-  if (response.status === 401) clearAuthToken();
+  if (response.status === 401) handleUnauthorized();
 
   // 204 或网关吞掉响应体时没有 JSON 可拆，此时只能按 HTTP 状态判断
   const text = await response.text();
