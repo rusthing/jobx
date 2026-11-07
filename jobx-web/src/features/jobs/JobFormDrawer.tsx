@@ -3,7 +3,7 @@ import { AlertCircle, Braces, CalendarClock, Play, Sparkles, Wand2 } from "lucid
 import { Drawer } from "@/components/ui/Drawer";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea } from "@/components/ui/Field";
-import { Segmented, Switch } from "@/components/ui/Switch";
+import { Segmented } from "@/components/ui/Switch";
 import { Badge } from "@/components/ui/Badge";
 import { CRON_PRESETS, describeCron, nextRuns, normalizeCron, validateCron } from "@/lib/cron";
 import { JOB_TYPE, type Group, type Job, type JobInput, type JobType } from "@/lib/api";
@@ -40,7 +40,6 @@ interface FormState {
   validBegin: string;
   validEnd: string;
   params: string;
-  enabled: boolean;
 }
 
 function initialState(job: Job | null): FormState {
@@ -61,7 +60,6 @@ function initialState(job: Job | null): FormState {
       validBegin: "",
       validEnd: "",
       params: "",
-      enabled: true,
     };
   }
 
@@ -84,7 +82,6 @@ function initialState(job: Job | null): FormState {
     validBegin: toDateTimeLocal(job.validBeginMs),
     validEnd: toDateTimeLocal(job.validEndMs),
     params: job.params ? prettyJson(job.params) : "",
-    enabled: job.enabled,
   };
 }
 
@@ -240,7 +237,6 @@ function JobFormDrawerImpl({
       validEndMs: fromDateTimeLocal(form.validEnd),
       params: form.params.trim() ? form.params.trim() : null,
       remark: form.remark.trim() ? form.remark.trim() : null,
-      enabled: form.enabled,
     });
   };
 
@@ -627,20 +623,6 @@ function JobFormDrawerImpl({
 
         {job && (
           <section className="space-y-2 border-t border-line pt-4">
-            <div className="flex items-center justify-between rounded-lg border border-line bg-sunken/60 px-3 py-2">
-              <div>
-                <p className="text-[11px] text-muted">启用状态</p>
-                <p className="text-[11.5px] text-ink-soft">
-                  停用后调度器跳过该计划，执行历史仍保留
-                </p>
-              </div>
-              <Switch
-                checked={form.enabled}
-                onChange={(value) => set("enabled", value)}
-                label="启用计划"
-              />
-            </div>
-
             <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 pt-1 text-[11px]">
               <div className="flex justify-between gap-2">
                 <dt className="text-muted">下次分派</dt>
@@ -662,16 +644,6 @@ function JobFormDrawerImpl({
               </div>
             </dl>
           </section>
-        )}
-
-        {!job && (
-          <div className="flex items-center justify-between rounded-lg border border-line bg-sunken/60 px-3 py-2">
-            <div>
-              <p className="text-[11.5px] font-medium text-ink-soft">创建后立即启用</p>
-              <p className="text-[10.5px] text-muted">关闭则先存为停用状态，确认无误后再开启</p>
-            </div>
-            <Switch checked={form.enabled} onChange={(value) => set("enabled", value)} label="启用计划" />
-          </div>
         )}
       </div>
     </Drawer>

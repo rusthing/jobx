@@ -615,6 +615,7 @@ export const mockJobs = {
       ...payload,
       id: newId(),
       highFreq: null,
+      enabled: payload.enabled ?? true,
       groupId: payload.groupId ?? null,
       params: payload.params ?? null,
       cron: payload.cron ?? null,
@@ -650,6 +651,8 @@ export const mockJobs = {
       ...payload,
       id: input.id,
       highFreq: null,
+      // 状态字段只在列表行内切换，编辑时不传保持原值，避免覆盖
+      enabled: payload.enabled === undefined ? state.jobs[index].enabled : payload.enabled,
       // 修改时不传 groupId 表示「不动分组」，不能因为 payload 里是 undefined 就清空
       groupId: payload.groupId === undefined ? state.jobs[index].groupId : payload.groupId,
       updateMs: String(Date.now()),

@@ -132,7 +132,8 @@ export interface JobInput {
   /** 任务保留时长，毫秒；不传或 null = 永久保留 */
   taskExpireDuration?: number | null;
   remark?: string | null;
-  enabled: boolean;
+  /** 状态字段：新建不传由数据库默认启用，编辑不传保持原值 */
+  enabled?: boolean;
 }
 
 export interface JobQuery {
