@@ -30,7 +30,7 @@ const PAGE_SIZE = 25;
 type TimeRange = "all" | "1h" | "24h" | "7d";
 
 const TIME_RANGES: Array<{ value: TimeRange; label: string; ms?: number }> = [
-  { value: "all", label: "分派时间" },
+  { value: "all", label: "全部时间" },
   { value: "1h", label: "1 小时内", ms: 3_600_000 },
   { value: "24h", label: "24 小时内", ms: 24 * 3_600_000 },
   { value: "7d", label: "7 天内", ms: 7 * 24 * 3_600_000 },
@@ -202,20 +202,19 @@ export function TasksPage() {
             ]}
           />
 
-          <Select
+          <Segmented
+            ariaLabel="按来源筛选"
             value={taskType}
-            onChange={(event) => {
-              setTaskType(
-                event.target.value === "all" ? "all" : (Number(event.target.value) as TaskType),
-              );
+            onChange={(value) => {
+              setTaskType(value);
               setPage(1);
             }}
-            className="h-9 w-[118px] text-[12.5px]"
-          >
-            <option value="all">全部来源</option>
-            <option value={TASK_TYPE.immediate}>立即执行</option>
-            <option value={TASK_TYPE.scheduled}>计划执行</option>
-          </Select>
+            options={[
+              { value: "all", label: "全部来源" },
+              { value: TASK_TYPE.immediate, label: "立即执行" },
+              { value: TASK_TYPE.scheduled, label: "计划执行" },
+            ]}
+          />
 
           <Select
             value={executor}
@@ -233,18 +232,12 @@ export function TasksPage() {
             ))}
           </Select>
 
-          <Select
+          <Segmented
+            ariaLabel="按分派时间筛选"
             value={range}
-            onChange={(event) => changeRange(event.target.value as TimeRange)}
-            className="h-9 w-[118px] text-[12.5px]"
-            aria-label="按分派时间筛选"
-          >
-            {TIME_RANGES.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </Select>
+            onChange={changeRange}
+            options={TIME_RANGES.map((item) => ({ value: item.value, label: item.label }))}
+          />
         </div>
 
         {error ? (

@@ -49,7 +49,7 @@ type TimeRange = "all" | "24h" | "7d" | "30d";
 const PAGE_SIZE = 20;
 
 const TIME_RANGES: Array<{ value: TimeRange; label: string; ms?: number }> = [
-  { value: "all", label: "创建时间" },
+  { value: "all", label: "全部时间" },
   { value: "24h", label: "24 小时内", ms: 24 * 3_600_000 },
   { value: "7d", label: "7 天内", ms: 7 * 24 * 3_600_000 },
   { value: "30d", label: "30 天内", ms: 30 * 24 * 3_600_000 },
@@ -319,21 +319,21 @@ export function JobsPage() {
             ]}
           />
 
-          <Select
+          <Segmented
+            ariaLabel="按计划类型筛选"
             value={type}
-            onChange={(event) => {
-              setType(event.target.value === "all" ? "all" : (Number(event.target.value) as JobType));
+            onChange={(value) => {
+              setType(value);
               resetPage();
             }}
-            className="h-9 w-[118px] text-[12.5px]"
-          >
-            <option value="all">全部类型</option>
-            {Object.entries(JOB_TYPE_META).map(([value, meta]) => (
-              <option key={value} value={value}>
-                {meta.label}
-              </option>
-            ))}
-          </Select>
+            options={[
+              { value: "all", label: "全部类型" },
+              ...Object.entries(JOB_TYPE_META).map(([value, meta]) => ({
+                value: Number(value) as JobType,
+                label: meta.label,
+              })),
+            ]}
+          />
 
           <Select
             value={executor}
@@ -368,18 +368,12 @@ export function JobsPage() {
             ))}
           </Select>
 
-          <Select
+          <Segmented
+            ariaLabel="按创建时间筛选"
             value={range}
-            onChange={(event) => changeRange(event.target.value as TimeRange)}
-            className="h-9 w-[118px] text-[12.5px]"
-            aria-label="按创建时间筛选"
-          >
-            {TIME_RANGES.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </Select>
+            onChange={changeRange}
+            options={TIME_RANGES.map((item) => ({ value: item.value, label: item.label }))}
+          />
 
           <Link
             to="/groups"

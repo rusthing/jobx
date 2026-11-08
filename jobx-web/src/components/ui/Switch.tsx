@@ -48,50 +48,50 @@ export interface SegmentedOption<T extends string | number> {
   count?: number;
 }
 
+/**
+ * 少量选项的选择控件（按钮组）。
+ *
+ * 与 dtw-web 的 `OptionButtons` 保持一致：2–5 个固定枚举用按钮组，不放下拉；
+ * 选中项强调色描边 + 浅强调底，未选中为中性描边；容器 `radiogroup`，每项 `radio`。
+ * 窄屏 `flex-wrap` 换行，按钮高度不低于 32px。
+ */
 export function Segmented<T extends string | number>({
   options,
   value,
   onChange,
-  size = "md",
+  ariaLabel = "选项",
   className,
 }: {
   options: SegmentedOption<T>[];
   value: T;
   onChange: (value: T) => void;
+  ariaLabel?: string;
+  /** 保留旧调用点传参；两种尺寸统一按规范 32px 最小点击高度渲染。 */
   size?: "sm" | "md";
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "inline-flex items-center gap-0.5 rounded-lg border border-line bg-sunken p-0.5",
-        className,
-      )}
-    >
+    <div role="radiogroup" aria-label={ariaLabel} className={cn("flex flex-wrap gap-1.5", className)}>
       {options.map((option) => {
         const active = option.value === value;
         return (
           <button
             key={String(option.value)}
             type="button"
-            aria-pressed={active}
+            role="radio"
+            aria-checked={active}
             onClick={() => onChange(option.value)}
             className={cn(
-              "inline-flex min-h-9 items-center gap-1.5 rounded-[6px] font-medium transition-colors md:min-h-0",
-              size === "sm" ? "h-6 px-2 text-[12px]" : "h-7 px-2.5 text-[12.5px]",
+              "inline-flex h-8 min-h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-[12.5px] transition-colors",
+              "cursor-pointer",
               active
-                ? "bg-surface text-ink shadow-[0_1px_2px_rgb(25_27_22/0.08)]"
-                : "text-muted hover:text-ink-soft",
+                ? "border-accent/40 bg-accent-soft font-medium text-accent"
+                : "border-line bg-surface text-ink-soft hover:border-line-strong hover:bg-sunken",
             )}
           >
             {option.label}
             {option.count !== undefined && (
-              <span
-                className={cn(
-                  "tnum text-[10.5px]",
-                  active ? "text-ink-soft" : "text-muted/80",
-                )}
-              >
+              <span className={cn("tnum text-[10.5px]", active ? "text-accent/80" : "text-muted/80")}>
                 {option.count}
               </span>
             )}

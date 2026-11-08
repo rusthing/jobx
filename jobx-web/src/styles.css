@@ -79,6 +79,27 @@
     font-feature-settings: "tnum";
   }
 
+  /* 可点击元素统一手型；禁用态统一禁用光标（详见 dtw-web/docs/ui-spec.md）。 */
+  a[href],
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"]:not([aria-disabled="true"]),
+  [role="switch"]:not(:disabled),
+  summary,
+  select:not(:disabled),
+  label:has(> input[type="checkbox"]:not(:disabled)),
+  label:has(> input[type="radio"]:not(:disabled)),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  input[type="color"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  :disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
   ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
