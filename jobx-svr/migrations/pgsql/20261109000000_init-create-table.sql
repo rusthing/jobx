@@ -1,245 +1,330 @@
--- jobx 数据库迁移基线：init-create-table（最终态建表）
---
--- 清库后按 000000 → 000001 → 000002 顺序执行一次建成。
--- 表、列、主键、唯一键、外键、检查约束与注释；普通索引在 init-index.sql。
--- 与线上库 pg_dump -s 归一化后逐行一致。
+/*==============================================================*/
+/* DBMS name:      PostgreSQL 9.x                               */
+/* Created on:     2026/10/14 18:01:04                          */
+/*==============================================================*/
 
-CREATE TABLE public.jobx_group (
-    id bigint NOT NULL,
-    name character varying(50) NOT NULL,
-    remark character varying(50),
-    creater_id bigint NOT NULL,
-    create_ms bigint NOT NULL,
-    updater_id bigint NOT NULL,
-    update_ms bigint NOT NULL
+
+/*==============================================================*/
+/* Table: jobx_job                                              */
+/*==============================================================*/
+create table jobx_job (
+                          id                   INT8                 not null,
+                          name                 VARCHAR(50)          not null,
+                          group_id             INT8                 null,
+                          params               VARCHAR(800)         null,
+                          job_type             INT2                 not null,
+                          high_freq            BOOL                 null default false,
+                          cron                 VARCHAR(30)          null,
+                          interval_duration    VARCHAR(10)          null,
+                          valid_begin_ms       INT8                 null,
+                          valid_end_ms         INT8                 null,
+                          executor_code        VARCHAR(50)          not null,
+                          assign_lead_ms       INT4                 null,
+                          next_assign_ms       INT8                 null,
+                          stream_max_len       INT4                 null,
+                          task_expire_duration VARCHAR(30)          null,
+                          remark               VARCHAR(50)          null,
+                          enabled              BOOL                 not null default true,
+                          creater_id           INT8                 not null,
+                          create_ms            INT8                 not null,
+                          updater_id           INT8                 not null,
+                          update_ms            INT8                 not null,
+                          constraint PK_JOBX_JOB primary key (id),
+                          constraint AK_NAME_JOBX_JOB unique (name)
 );
 
-COMMENT ON TABLE public.jobx_group IS '任务分组';
+comment on table jobx_job is
+'任务计划';
 
-COMMENT ON COLUMN public.jobx_group.id IS 'ID';
+comment on column jobx_job.id is
+'ID';
 
-COMMENT ON COLUMN public.jobx_group.name IS '名称
+comment on column jobx_job.name is
+'名称
 @len 1..=50';
 
-COMMENT ON COLUMN public.jobx_group.remark IS '备注
-@len 0..=50';
-
-COMMENT ON COLUMN public.jobx_group.creater_id IS '创建者ID';
-
-COMMENT ON COLUMN public.jobx_group.create_ms IS '创建时间戳';
-
-COMMENT ON COLUMN public.jobx_group.updater_id IS '更新者ID';
-
-COMMENT ON COLUMN public.jobx_group.update_ms IS '更新时间戳';
-
-CREATE TABLE public.jobx_job (
-    id bigint NOT NULL,
-    name character varying(50) NOT NULL,
-    group_id bigint,
-    params character varying(800),
-    job_type smallint NOT NULL,
-    high_freq boolean DEFAULT false,
-    cron character varying(30),
-    interval_duration character varying(10),
-    valid_begin_ms bigint,
-    valid_end_ms bigint,
-    executor_code character varying(50) NOT NULL,
-    assign_lead_ms integer,
-    next_assign_ms bigint,
-    stream_max_len integer,
-    task_expire_duration character varying(30),
-    remark character varying(50),
-    enabled boolean DEFAULT true NOT NULL,
-    creater_id bigint NOT NULL,
-    create_ms bigint NOT NULL,
-    updater_id bigint NOT NULL,
-    update_ms bigint NOT NULL
-);
-
-COMMENT ON TABLE public.jobx_job IS '任务计划';
-
-COMMENT ON COLUMN public.jobx_job.id IS 'ID';
-
-COMMENT ON COLUMN public.jobx_job.name IS '名称
-@len 1..=50';
-
-COMMENT ON COLUMN public.jobx_job.group_id IS '任务分组ID
+comment on column jobx_job.group_id is
+'任务分组ID
 为空表示未分组';
 
-COMMENT ON COLUMN public.jobx_job.params IS '参数
+comment on column jobx_job.params is
+'参数
 @len 0..=800';
 
-COMMENT ON COLUMN public.jobx_job.job_type IS '计划类型
+comment on column jobx_job.job_type is
+'计划类型
 @enum JobType default=Manual
   0=Manual      手动分派
   1=Cron        cron 表达式
   2=FixedDelay  固定延迟
   3=FixedRate   固定频率';
 
-COMMENT ON COLUMN public.jobx_job.high_freq IS '是否高频任务
+comment on column jobx_job.high_freq is
+'是否高频任务
 这个由计划类型、cron表达式、固定时间间隔与配置中的高频任务时长阈值计算得出';
 
-COMMENT ON COLUMN public.jobx_job.cron IS 'cron表达式
+comment on column jobx_job.cron is
+'cron表达式
 当 job_type 为 cron表达式时必填
 @len 0..=30';
 
-COMMENT ON COLUMN public.jobx_job.interval_duration IS '固定间隔时间
+comment on column jobx_job.interval_duration is
+'固定间隔时间
 当job_type为固定延迟或固定频率时必填';
 
-COMMENT ON COLUMN public.jobx_job.valid_begin_ms IS '有效开始时间戳';
+comment on column jobx_job.valid_begin_ms is
+'有效开始时间戳';
 
-COMMENT ON COLUMN public.jobx_job.valid_end_ms IS '有效结束时间戳';
+comment on column jobx_job.valid_end_ms is
+'有效结束时间戳';
 
-COMMENT ON COLUMN public.jobx_job.executor_code IS '执行器编码
+comment on column jobx_job.executor_code is
+'执行器编码
 发布任务消息时的key将以此编码结尾，只有相同编码的执行器才订阅此key
 @len 1..=50';
 
-COMMENT ON COLUMN public.jobx_job.assign_lead_ms IS '分派提前毫秒数';
+comment on column jobx_job.assign_lead_ms is
+'分派提前毫秒数';
 
-COMMENT ON COLUMN public.jobx_job.next_assign_ms IS '下次分派时间戳';
+comment on column jobx_job.next_assign_ms is
+'下次分派时间戳';
 
-COMMENT ON COLUMN public.jobx_job.stream_max_len IS '发布该计划的消息时使用的 Stream 长度上限（MAXLEN ~ N）
+comment on column jobx_job.stream_max_len is
+'发布该计划的消息时使用的 Stream 长度上限（MAXLEN ~ N）
 为空时采用配置文件中 jobx.scheduler.stream-max-len 的默认值';
 
-COMMENT ON COLUMN public.jobx_job.task_expire_duration IS '任务保留时长
+comment on column jobx_job.task_expire_duration is
+'任务保留时长
 该计划产生的任务记录超过这个时长后会被服务端自动清理
 基准是任务的创建时刻（create_ms），与任务是否执行完无关
 为空表示永久保留，不参与清理';
 
-COMMENT ON COLUMN public.jobx_job.remark IS '备注
+comment on column jobx_job.remark is
+'备注
 @len 0..=50';
 
-COMMENT ON COLUMN public.jobx_job.enabled IS '启用';
+comment on column jobx_job.enabled is
+'启用';
 
-COMMENT ON COLUMN public.jobx_job.creater_id IS '创建者ID';
+comment on column jobx_job.creater_id is
+'创建者ID';
 
-COMMENT ON COLUMN public.jobx_job.create_ms IS '创建时间戳';
+comment on column jobx_job.create_ms is
+'创建时间戳';
 
-COMMENT ON COLUMN public.jobx_job.updater_id IS '更新者ID';
+comment on column jobx_job.updater_id is
+'更新者ID';
 
-COMMENT ON COLUMN public.jobx_job.update_ms IS '更新时间戳';
+comment on column jobx_job.update_ms is
+'更新时间戳';
 
-CREATE TABLE public.jobx_task (
-    id bigint NOT NULL,
-    task_type smallint NOT NULL,
-    job_id bigint,
-    status smallint DEFAULT 0 NOT NULL,
-    assign_ms bigint NOT NULL,
-    scheduled_exec_start_ms bigint,
-    exec_detail character varying(800),
-    exec_start_ms bigint,
-    exec_end_ms bigint,
-    executor_code character varying(50) NOT NULL,
-    executor_instance character varying(100),
-    exec_params character varying(800),
-    job_type smallint NOT NULL,
-    high_freq boolean DEFAULT false,
-    cron character varying(30),
-    interval_duration character varying(10),
-    valid_begin_ms bigint,
-    valid_end_ms bigint,
-    exec_deadline_ms bigint,
-    assign_lead_ms integer,
-    creater_id bigint NOT NULL,
-    create_ms bigint NOT NULL,
-    updater_id bigint NOT NULL,
-    update_ms bigint NOT NULL
+/*==============================================================*/
+/* Index: jobx_job_PK                                           */
+/*==============================================================*/
+create unique index jobx_job_PK on jobx_job (
+                                             id
+    );
+
+/*==============================================================*/
+/* Index: Relationship_2_FK                                     */
+/*==============================================================*/
+create  index Relationship_2_FK on jobx_job (
+                                             group_id
+    );
+
+/*==============================================================*/
+/* Table: jobx_task                                             */
+/*==============================================================*/
+create table jobx_task (
+                           id                   INT8                 not null,
+                           task_type            INT2                 not null,
+                           job_id               INT8                 null,
+                           status               INT2                 not null default 0,
+                           assign_ms            INT8                 not null,
+                           scheduled_exec_start_ms INT8                 null,
+                           exec_detail          VARCHAR(800)         null,
+                           exec_start_ms        INT8                 null,
+                           exec_end_ms          INT8                 null,
+                           executor_code        VARCHAR(50)          not null,
+                           executor_instance    VARCHAR(100)         null,
+                           exec_params          VARCHAR(800)         null,
+                           job_type             INT2                 not null,
+                           high_freq            BOOL                 null default false,
+                           cron                 VARCHAR(30)          null,
+                           interval_duration    VARCHAR(10)          null,
+                           valid_begin_ms       INT8                 null,
+                           valid_end_ms         INT8                 null,
+                           exec_deadline_ms     INT8                 null,
+                           assign_lead_ms       INT4                 null,
+                           creater_id           INT8                 not null,
+                           create_ms            INT8                 not null,
+                           updater_id           INT8                 not null,
+                           update_ms            INT8                 not null,
+                           constraint PK_JOBX_TASK primary key (id),
+                           constraint AK_JOB_ID_AND_SCHEDULED_EXEC_START_MS_JOBX_TASK unique (job_id, scheduled_exec_start_ms)
 );
 
-COMMENT ON TABLE public.jobx_task IS '任务记录';
+comment on table jobx_task is
+'任务记录';
 
-COMMENT ON COLUMN public.jobx_task.id IS 'ID';
+comment on column jobx_task.id is
+'ID';
 
-COMMENT ON COLUMN public.jobx_task.task_type IS '任务类型
+comment on column jobx_task.task_type is
+'任务类型
 @enum TaskType default=Immediate
   1=Immediate  立即执行
   2=Scheduled  计划执行';
 
-COMMENT ON COLUMN public.jobx_task.job_id IS '任务计划ID';
+comment on column jobx_task.job_id is
+'任务计划ID';
 
-COMMENT ON COLUMN public.jobx_task.status IS '任务状态
+comment on column jobx_task.status is
+'任务状态
 @enum TaskStatus default=Running
   0=Running  运行中
   1=Success  成功
   2=Failed   失败';
 
-COMMENT ON COLUMN public.jobx_task.assign_ms IS '分派时间戳';
+comment on column jobx_task.assign_ms is
+'分派时间戳';
 
-COMMENT ON COLUMN public.jobx_task.scheduled_exec_start_ms IS '预定开始执行时间戳';
+comment on column jobx_task.scheduled_exec_start_ms is
+'预定开始执行时间戳';
 
-COMMENT ON COLUMN public.jobx_task.exec_detail IS '执行详情
+comment on column jobx_task.exec_detail is
+'执行详情
 @len 0..=800';
 
-COMMENT ON COLUMN public.jobx_task.exec_start_ms IS '开始执行时间戳';
+comment on column jobx_task.exec_start_ms is
+'开始执行时间戳';
 
-COMMENT ON COLUMN public.jobx_task.exec_end_ms IS '结束执行时间戳';
+comment on column jobx_task.exec_end_ms is
+'结束执行时间戳';
 
-COMMENT ON COLUMN public.jobx_task.executor_code IS '执行器编码
+comment on column jobx_task.executor_code is
+'执行器编码
 @len 1..=50';
 
-COMMENT ON COLUMN public.jobx_task.executor_instance IS '执行器实例
+comment on column jobx_task.executor_instance is
+'执行器实例
 @len 0..=100';
 
-COMMENT ON COLUMN public.jobx_task.exec_params IS '执行参数
+comment on column jobx_task.exec_params is
+'执行参数
 @len 0..=800';
 
-COMMENT ON COLUMN public.jobx_task.job_type IS '计划类型
+comment on column jobx_task.job_type is
+'计划类型
 @enum JobType default=Manual
   0=Manual      手动分派
   1=Cron        cron 表达式
   2=FixedDelay  固定延迟
   3=FixedRate   固定频率';
 
-COMMENT ON COLUMN public.jobx_task.high_freq IS '是否高频任务';
+comment on column jobx_task.high_freq is
+'是否高频任务';
 
-COMMENT ON COLUMN public.jobx_task.cron IS 'cron表达式
+comment on column jobx_task.cron is
+'cron表达式
 @len 0..=30';
 
-COMMENT ON COLUMN public.jobx_task.interval_duration IS '固定间隔时间';
+comment on column jobx_task.interval_duration is
+'固定间隔时间';
 
-COMMENT ON COLUMN public.jobx_task.valid_begin_ms IS '有效开始时间戳';
+comment on column jobx_task.valid_begin_ms is
+'有效开始时间戳';
 
-COMMENT ON COLUMN public.jobx_task.valid_end_ms IS '有效结束时间戳';
+comment on column jobx_task.valid_end_ms is
+'有效结束时间戳';
 
-COMMENT ON COLUMN public.jobx_task.exec_deadline_ms IS '执行截止时间戳
+comment on column jobx_task.exec_deadline_ms is
+'执行截止时间戳
 高频任务本次分派的执行时段终点（min(计划有效结束时间, 预定开始执行时间 + 高频分派间隔)）；为空表示不限，仅对高频任务有意义';
 
-COMMENT ON COLUMN public.jobx_task.assign_lead_ms IS '分派提前毫秒数';
+comment on column jobx_task.assign_lead_ms is
+'分派提前毫秒数';
 
-COMMENT ON COLUMN public.jobx_task.creater_id IS '创建者ID';
+comment on column jobx_task.creater_id is
+'创建者ID';
 
-COMMENT ON COLUMN public.jobx_task.create_ms IS '创建时间戳';
+comment on column jobx_task.create_ms is
+'创建时间戳';
 
-COMMENT ON COLUMN public.jobx_task.updater_id IS '更新者ID';
+comment on column jobx_task.updater_id is
+'更新者ID';
 
-COMMENT ON COLUMN public.jobx_task.update_ms IS '更新时间戳';
+comment on column jobx_task.update_ms is
+'更新时间戳';
 
-ALTER TABLE ONLY public.jobx_task
-    ADD CONSTRAINT ak_job_id_and_scheduled_exec_start_ms_jobx_task UNIQUE (job_id, scheduled_exec_start_ms);
+/*==============================================================*/
+/* Table: jobx_group                                            */
+/*==============================================================*/
+create table jobx_group (
+                            id                   INT8                 not null,
+                            name                 VARCHAR(50)          not null,
+                            remark               VARCHAR(50)          null,
+                            creater_id           INT8                 not null,
+                            create_ms            INT8                 not null,
+                            updater_id           INT8                 not null,
+                            update_ms            INT8                 not null,
+                            constraint PK_JOBX_GROUP primary key (id),
+                            constraint AK_NAME_JOBX_GROUP unique (name)
+);
 
-ALTER TABLE ONLY public.jobx_group
-    ADD CONSTRAINT ak_name_jobx_group UNIQUE (name);
+comment on table jobx_group is
+'任务分组';
 
-ALTER TABLE ONLY public.jobx_job
-    ADD CONSTRAINT ak_name_jobx_job UNIQUE (name);
+comment on column jobx_group.id is
+'ID';
 
-ALTER TABLE ONLY public.jobx_group
-    ADD CONSTRAINT pk_jobx_group PRIMARY KEY (id);
+comment on column jobx_group.name is
+'名称
+@len 1..=50';
 
-ALTER TABLE ONLY public.jobx_job
-    ADD CONSTRAINT pk_jobx_job PRIMARY KEY (id);
+comment on column jobx_group.remark is
+'备注
+@len 0..=50';
 
-ALTER TABLE ONLY public.jobx_task
-    ADD CONSTRAINT pk_jobx_task PRIMARY KEY (id);
+comment on column jobx_group.creater_id is
+'创建者ID';
 
-CREATE UNIQUE INDEX jobx_group_pk ON public.jobx_group USING btree (id);
+comment on column jobx_group.create_ms is
+'创建时间戳';
 
-CREATE UNIQUE INDEX jobx_job_pk ON public.jobx_job USING btree (id);
+comment on column jobx_group.updater_id is
+'更新者ID';
 
-CREATE UNIQUE INDEX jobx_task_pk ON public.jobx_task USING btree (id);
+comment on column jobx_group.update_ms is
+'更新时间戳';
 
-ALTER TABLE ONLY public.jobx_job
-    ADD CONSTRAINT fk_group_id__from__jobx_group FOREIGN KEY (group_id) REFERENCES public.jobx_group(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+/*==============================================================*/
+/* Index: jobx_task_PK                                          */
+/*==============================================================*/
+create unique index jobx_task_PK on jobx_task (
+                                               id
+    );
 
-ALTER TABLE ONLY public.jobx_task
-    ADD CONSTRAINT fk_job_id__from__jobx_job FOREIGN KEY (job_id) REFERENCES public.jobx_job(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+/*==============================================================*/
+/* Index: jobx_group_PK                                         */
+/*==============================================================*/
+create unique index jobx_group_PK on jobx_group (
+                                                 id
+    );
+
+/*==============================================================*/
+/* Index: Relationship_1_FK                                     */
+/*==============================================================*/
+create  index Relationship_1_FK on jobx_task (
+                                              job_id
+    );
+
+alter table jobx_task
+    add constraint fk_job_id__from__jobx_job foreign key (job_id)
+        references jobx_job (id)
+        on delete restrict on update restrict;
+
+alter table jobx_job
+    add constraint fk_group_id__from__jobx_group foreign key (group_id)
+        references jobx_group (id)
+        on delete restrict on update restrict;
