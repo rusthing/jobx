@@ -472,8 +472,8 @@ export function JobsPage() {
                   <th className="px-3 py-2 font-medium">分组</th>
                   <th className="px-3 py-2 font-medium">执行器</th>
                   <th className="px-3 py-2 font-medium">调度</th>
-                  <th className="px-3 py-2 font-medium">状态</th>
                   <th className="px-3 py-2 text-right font-medium">下次分派</th>
+                  <th className="px-3 py-2 font-medium">状态</th>
                   <th className="px-4 py-2 text-right font-medium">操作</th>
                 </tr>
               </thead>
@@ -541,6 +541,21 @@ export function JobsPage() {
                         </div>
                       </td>
 
+                      <td className="px-3 py-2.5 text-right">
+                        {next ? (
+                          <>
+                            <div className="tnum font-mono text-[12px] text-ink">
+                              {formatRelative(next, now)}
+                            </div>
+                            <div className="text-[10px] text-muted">{formatCompact(next)}</div>
+                          </>
+                        ) : (
+                          <span className="text-[11.5px] text-muted">
+                            {job.jobType === JOB_TYPE.manual ? "手动" : "--"}
+                          </span>
+                        )}
+                      </td>
+
                       <td className="px-3 py-2.5">
                         <div className="flex items-center gap-2">
                           <Switch
@@ -557,21 +572,6 @@ export function JobsPage() {
                             {job.enabled ? "启用" : "停用"}
                           </span>
                         </div>
-                      </td>
-
-                      <td className="px-3 py-2.5 text-right">
-                        {next ? (
-                          <>
-                            <div className="tnum font-mono text-[12px] text-ink">
-                              {formatRelative(next, now)}
-                            </div>
-                            <div className="text-[10px] text-muted">{formatCompact(next)}</div>
-                          </>
-                        ) : (
-                          <span className="text-[11.5px] text-muted">
-                            {job.jobType === JOB_TYPE.manual ? "手动" : "--"}
-                          </span>
-                        )}
                       </td>
 
                       <td className="px-4 py-2.5">
