@@ -136,8 +136,14 @@ impl JobxJobSvc {
             }
         };
 
+        // 已超出计划的生效窗口：本次之后不会再有执行，返回 `None`（与函数文档一致）。
+        //
+        // 这里**不能报错**：`recalc_next_assign_ms` 与「创建任务记录」在同一个事务里，
+        // 报错会把本轮这条**本来应该执行**的任务一起回滚掉 —— 有效期内最后一次执行
+        // 永远落不了库；且 `next_assign_ms` 不会被推进，调度器每轮都会重发这条注定
+        // 失败的计划。返回 `None` 时 `next_assign_ms` 会被清空，计划自然收尾。
         if next_exec_ms > valid_end_ms {
-            Err(validator::ValidationError::new("无下一次执行时间"))?
+            return Ok((None, is_high_freq_task));
         }
 
         // 用饱和减法而不是裸减：`next_exec_ms < assign_lead_ms` 时裸减会 u64 下溢
@@ -199,9 +205,6 @@ impl JobxJobSvc {
             assign_lead_ms,
             now_ms,
         )?;
-        if next_assign_ms.is_none() {
-            Err(validator::ValidationError::new("无下一次执行时间"))?
-        }
 
         Ok((next_assign_ms, is_high_freq_task))
     }
@@ -255,6 +258,11 @@ impl JobxJobSvc {
                 valid_end_ms,
                 Some(Some(U64::from(assign_lead_ms.value() as u64))),
             )?;
+            // 新增的计划必须至少还能执行一次：算不出下次执行时刻（有效结束时间已过、
+            // cron 永不触发等）直接拒绝，避免落一条永远不会被分派、却一直留在列表里的计划。
+            if next_assign_ms.is_none() {
+                Err(validator::ValidationError::new("无下一次执行时间"))?
+            }
             add_dto.assign_lead_ms = Some(Some(assign_lead_ms));
             add_dto.next_assign_ms =
                 Some(next_assign_ms.map(|next_assign_ms| next_assign_ms.into()));
@@ -427,6 +435,13 @@ impl JobxJobSvc {
     /// - 相邻 `scheduled_exec_start_ms` 的间距 = 本周期长度，且高频任务的
     ///   `exec_deadline_ms`（= 本段 scheduled + hf_interval）正好等于下一段的 scheduled，
     ///   段与段首尾相接、不重叠。
+    ///
+    /// ## 计划到期
+    ///
+    /// 推不出下一次执行时刻时（已超出有效结束时间、cron 再无触发点），
+    /// `next_assign_ms` 被**清空**，表示该计划已跑完、不再参与分派。
+    /// 不能在这里报错：本方法与「创建任务记录」同事务，报错会连本轮这次本该执行的
+    /// 任务一起回滚，且 `next_assign_ms` 不推进会让调度器无限重发。
     ///
     /// ## 参数
     ///
@@ -880,11 +895,14 @@ create table jobx_job (
         assert_eq!(next, Some(1_940_000));
     }
 
-    /// 下次执行时刻超过有效结束时间 → 报错（计划已到期）
+    /// 下次执行时刻超过有效结束时间 → 没有下一次（`None`），不报错
+    ///
+    /// 报错会让 `take` 事务里「创建任务 + 推进 next_assign」整体回滚，
+    /// 有效期内最后一次执行因此丢失。
     #[test]
-    fn valid_end_exceeded_errors() {
+    fn valid_end_exceeded_yields_no_next() {
         init_scheduler_config();
-        let result = JobxJobSvc::calc_next_assign(
+        let (next, high_freq) = JobxJobSvc::calc_next_assign(
             JobType::FixedDelay,
             None,
             Some(api::Duration::from_millis(300_000)),
@@ -892,9 +910,11 @@ create table jobx_job (
             Some(U64::from(500_000u64)),
             Some(U64::from(60_000u64)),
             1_000_000,
-        );
+        )
+        .unwrap();
 
-        assert!(result.is_err(), "超过有效结束时间应当报错");
+        assert_eq!(next, None, "超过有效结束时间应当没有下一次执行");
+        assert!(!high_freq);
     }
 
     /// Cron：落在真正的 cron 拍点上，且 `next_assign + lead` 是 5 分钟的整数倍
