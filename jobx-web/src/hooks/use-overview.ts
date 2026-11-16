@@ -1,32 +1,43 @@
-import { useMemo } from "react";
-import { computeOverview } from "@/lib/metrics";
+import { useQuery } from "@tanstack/react-query";
+import { overview, type OverviewSummary } from "@/lib/api";
 import { useAllJobs } from "./use-jobs";
-import { useRecentTasks } from "./use-tasks";
-import { useNow } from "./use-now";
+import { useRecentFailures } from "./use-tasks";
+
+export const overviewKeys = {
+  summary: ["overview", "summary"] as const,
+};
 
 /**
- * 总览指标。数据来自两个列表接口（计划全量 + 最近执行记录），
- * 聚合在浏览器侧完成 —— 后端没有专门的统计接口，这里不去假装有。
+ * 总览指标。
+ *
+ * 计划 / 24h 执行 / 小时趋势 / 执行器维度都来自一次 `GET /jobx/overview/summary`，
+ * 聚合在服务端做（不再受「前 500 条计划 / 1200 条记录」的采样上限影响）。
+ * 「即将分派」与「最近失败」仍走列表接口：前者只需要最早的一批计划，
+ * 后者只需要几条失败记录，都不值得进统计接口。
  */
 export function useOverview() {
-  const jobsQuery = useAllJobs();
-  const tasksQuery = useRecentTasks(1_200);
-  const now = useNow(5_000);
+  const summaryQuery = useQuery<OverviewSummary>({
+    queryKey: overviewKeys.summary,
+    queryFn: () => overview.summary(),
+    refetchInterval: 15_000,
+    staleTime: 5_000,
+  });
 
-  const data = useMemo(() => {
-    if (!jobsQuery.data || !tasksQuery.data) return null;
-    return computeOverview(jobsQuery.data, tasksQuery.data, now);
-  }, [jobsQuery.data, tasksQuery.data, now]);
+  const jobsQuery = useAllJobs();
+  const failuresQuery = useRecentFailures(summaryQuery.data?.windowStartMs ?? null);
 
   return {
-    data,
+    data: summaryQuery.data ?? null,
+    /** 用于「即将分派」列表与执行记录上的计划名 */
     jobs: jobsQuery.data ?? [],
-    tasks: tasksQuery.data ?? [],
-    isLoading: jobsQuery.isLoading || tasksQuery.isLoading,
-    error: (jobsQuery.error ?? tasksQuery.error) as Error | null,
+    /** 24h 内最近几条失败，取自执行列表接口 */
+    failures: failuresQuery.data ?? [],
+    isLoading: summaryQuery.isLoading,
+    error: (summaryQuery.error ?? jobsQuery.error) as Error | null,
     refetch: () => {
+      void summaryQuery.refetch();
       void jobsQuery.refetch();
-      void tasksQuery.refetch();
+      void failuresQuery.refetch();
     },
   };
 }

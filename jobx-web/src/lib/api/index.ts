@@ -8,8 +8,8 @@
  */
 
 import { API_BASE } from "./http";
-import { liveGroups, liveJobs, liveTasks } from "./live";
-import { mockGroups, mockJobs, mockTasks } from "./mock";
+import { liveGroups, liveJobs, liveOverview, liveTasks } from "./live";
+import { mockGroups, mockJobs, mockOverview, mockTasks } from "./mock";
 import type {
   Group,
   GroupInput,
@@ -17,6 +17,7 @@ import type {
   Job,
   JobInput,
   JobQuery,
+  OverviewSummary,
   Page,
   Task,
   TaskQuery,
@@ -99,6 +100,12 @@ export const groups = {
     isMock() ? mockGroups.update(input) : liveGroups.update(input),
   remove: (id: string): Promise<null> =>
     isMock() ? mockGroups.remove(id) : liveGroups.remove(id),
+};
+
+export const overview = {
+  /** 总览指标：服务端聚合，口径见 `OverviewSummary` */
+  summary: (): Promise<OverviewSummary> =>
+    isMock() ? mockOverview.summary() : liveOverview.summary(),
 };
 
 export { ApiError } from "./http";

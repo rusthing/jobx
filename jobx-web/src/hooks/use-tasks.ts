@@ -1,10 +1,10 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { tasks, type Page, type Task, type TaskQuery } from "@/lib/api";
+import { TASK_STATUS, tasks, type Page, type Task, type TaskQuery } from "@/lib/api";
 
 export const taskKeys = {
   all: ["tasks"] as const,
   page: (query: TaskQuery) => ["tasks", "page", query] as const,
-  recent: (limit: number) => ["tasks", "recent", limit] as const,
+  recentFailures: (afterMs: number) => ["tasks", "failures", afterMs] as const,
   detail: (id: string) => ["tasks", "detail", id] as const,
 };
 
@@ -20,11 +20,18 @@ export function useTasksPage(query: TaskQuery, options?: { poll?: boolean }) {
   });
 }
 
-/** 总览 / 执行器聚合用：最近一批执行记录 */
-export function useRecentTasks(limit = 400) {
+/** 总览「最近失败」用：24h 窗口内最近几条失败记录（走执行列表接口） */
+export function useRecentFailures(afterMs: number | null) {
   return useQuery<Task[]>({
-    queryKey: taskKeys.recent(limit),
-    queryFn: () => tasks.list({ size: limit, orderBy: "assign_ms:desc" }),
+    queryKey: taskKeys.recentFailures(afterMs ?? 0),
+    queryFn: () =>
+      tasks.list({
+        status: TASK_STATUS.failed,
+        assignAfterMs: String(afterMs),
+        size: 5,
+        orderBy: "assign_ms:desc",
+      }),
+    enabled: afterMs !== null,
     refetchInterval: 15_000,
     staleTime: 5_000,
   });

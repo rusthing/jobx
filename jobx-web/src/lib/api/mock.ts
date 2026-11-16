@@ -20,6 +20,10 @@ import {
   type Job,
   type JobInput,
   type JobQuery,
+  type OverviewActivity,
+  type OverviewExecutor,
+  type OverviewHour,
+  type OverviewSummary,
   type Page,
   type Task,
   type TaskQuery,
@@ -677,7 +681,7 @@ export const mockJobs = {
     await delay(180);
     const job = state.jobs.find((item) => item.id === id);
     if (!job) throw new ApiError("计划不存在", 404, -2);
-    if (!job.enabled) throw new ApiError("计划已停用，无法手动触发", 200, -2);
+    // 与真实服务端一致：手动补跑不校验 enabled，停用的计划也允许立即跑一次
 
     const now = Date.now();
     const task: Task = {
@@ -821,5 +825,173 @@ export const mockGroups = {
     }
     state.groups = state.groups.filter((group) => group.id !== id);
     return null;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// 总览统计：与服务端 `/jobx/overview/summary` 同一套口径
+// （24h 窗口按 assignMs，running 计入总量单列，skipped 不进成功率分母）
+// ---------------------------------------------------------------------------
+
+const OVERVIEW_HOURS = 24;
+
+function overviewRate(success: number, failed: number): number | null {
+  const done = success + failed;
+  return done > 0 ? Math.round((success / done) * 100) : null;
+}
+
+function overviewPercentile(sorted: number[], ratio: number): number | null {
+  if (sorted.length === 0) return null;
+  return sorted[Math.min(sorted.length - 1, Math.round((sorted.length - 1) * ratio))];
+}
+
+export const mockOverview = {
+  async summary(): Promise<OverviewSummary> {
+    await delay(60);
+    const now = Date.now();
+    const windowStart = Math.floor((now - (OVERVIEW_HOURS - 1) * HOUR) / HOUR) * HOUR;
+
+    const hourIndexOf = (time: number): number | null => {
+      const index = Math.floor((Math.floor(time / HOUR) * HOUR - windowStart) / HOUR);
+      return index >= 0 && index < OVERVIEW_HOURS ? index : null;
+    };
+
+    const jobs = state.jobs;
+    const tasks24 = state.tasks.filter((task) => Number(task.assignMs) >= windowStart);
+
+    const hourly: OverviewHour[] = Array.from({ length: OVERVIEW_HOURS }, (_, index) => ({
+      hourStartMs: windowStart + index * HOUR,
+      success: 0,
+      failed: 0,
+      skipped: 0,
+    }));
+
+    const durations: number[] = [];
+    for (const task of tasks24) {
+      const index = hourIndexOf(Number(task.assignMs));
+      if (index !== null) {
+        if (task.status === TASK_STATUS.success) hourly[index].success += 1;
+        else if (task.status === TASK_STATUS.failed) hourly[index].failed += 1;
+        else if (task.status === TASK_STATUS.skipped) hourly[index].skipped += 1;
+      }
+      if (task.execStartMs !== null && task.execEndMs !== null) {
+        const duration = Number(task.execEndMs) - Number(task.execStartMs);
+        if (duration >= 0) durations.push(duration);
+      }
+    }
+    durations.sort((a, b) => a - b);
+
+    const success = tasks24.filter((task) => task.status === TASK_STATUS.success).length;
+    const failed = tasks24.filter((task) => task.status === TASK_STATUS.failed).length;
+
+    const executors = new Map<string, OverviewExecutor>();
+    const ensure = (code: string): OverviewExecutor => {
+      let stat = executors.get(code);
+      if (!stat) {
+        stat = {
+          code,
+          jobs: 0,
+          enabledJobs: 0,
+          highFreqJobs: 0,
+          tasks24h: 0,
+          running: 0,
+          success24h: 0,
+          failed24h: 0,
+          skipped24h: 0,
+          successRate: null,
+          avgDurationMs: null,
+          lastActivityMs: null,
+          activity: Array.from({ length: OVERVIEW_HOURS }, (): OverviewActivity => ({
+            count: 0,
+            failed: 0,
+          })),
+        };
+        executors.set(code, stat);
+      }
+      return stat;
+    };
+
+    for (const job of jobs) {
+      const stat = ensure(job.executorCode);
+      stat.jobs += 1;
+      if (job.enabled) stat.enabledJobs += 1;
+      if (job.highFreq) stat.highFreqJobs += 1;
+    }
+
+    const durationsByExecutor = new Map<string, number[]>();
+    for (const task of tasks24) {
+      const stat = ensure(task.executorCode);
+      stat.tasks24h += 1;
+      if (task.status === TASK_STATUS.running) stat.running += 1;
+      if (task.status === TASK_STATUS.success) stat.success24h += 1;
+      if (task.status === TASK_STATUS.failed) stat.failed24h += 1;
+      if (task.status === TASK_STATUS.skipped) stat.skipped24h += 1;
+
+      const activity = Number(task.execStartMs ?? task.assignMs);
+      if (stat.lastActivityMs === null || activity > stat.lastActivityMs) {
+        stat.lastActivityMs = activity;
+      }
+      const index = hourIndexOf(Number(task.assignMs));
+      if (index !== null) {
+        stat.activity[index].count += 1;
+        if (task.status === TASK_STATUS.failed) stat.activity[index].failed += 1;
+      }
+      if (task.execStartMs !== null && task.execEndMs !== null) {
+        const duration = Number(task.execEndMs) - Number(task.execStartMs);
+        if (duration >= 0) {
+          const list = durationsByExecutor.get(task.executorCode) ?? [];
+          list.push(duration);
+          durationsByExecutor.set(task.executorCode, list);
+        }
+      }
+    }
+
+    for (const stat of executors.values()) {
+      stat.successRate = overviewRate(stat.success24h, stat.failed24h);
+      const list = durationsByExecutor.get(stat.code) ?? [];
+      stat.avgDurationMs = list.length
+        ? Math.round(list.reduce((acc, value) => acc + value, 0) / list.length)
+        : null;
+    }
+
+    return {
+      generatedAtMs: now,
+      windowStartMs: windowStart,
+      jobs: {
+        total: jobs.length,
+        enabled: jobs.filter((job) => job.enabled).length,
+        disabled: jobs.filter((job) => !job.enabled).length,
+        manual: jobs.filter((job) => job.jobType === JOB_TYPE.manual).length,
+        cron: jobs.filter((job) => job.jobType === JOB_TYPE.cron).length,
+        fixedDelay: jobs.filter((job) => job.jobType === JOB_TYPE.fixedDelay).length,
+        fixedRate: jobs.filter((job) => job.jobType === JOB_TYPE.fixedRate).length,
+        highFreq: jobs.filter((job) => job.highFreq).length,
+        nextAssignSoon: jobs.filter(
+          (job) =>
+            job.enabled &&
+            job.jobType !== JOB_TYPE.manual &&
+            job.nextAssignMs !== null &&
+            Number(job.nextAssignMs) <= now + 60_000,
+        ).length,
+      },
+      tasks: {
+        total: tasks24.length,
+        running: tasks24.filter((task) => task.status === TASK_STATUS.running).length,
+        success,
+        failed,
+        skipped: tasks24.filter((task) => task.status === TASK_STATUS.skipped).length,
+        successRate: overviewRate(success, failed),
+        avgDurationMs: durations.length
+          ? Math.round(durations.reduce((acc, value) => acc + value, 0) / durations.length)
+          : null,
+        p50DurationMs: overviewPercentile(durations, 0.5),
+        p95DurationMs: overviewPercentile(durations, 0.95),
+        p99DurationMs: overviewPercentile(durations, 0.99),
+      },
+      hourly,
+      executors: [...executors.values()].sort(
+        (a, b) => b.tasks24h - a.tasks24h || a.code.localeCompare(b.code),
+      ),
+    };
   },
 };

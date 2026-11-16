@@ -3,7 +3,10 @@ use anyhow::anyhow;
 use chrono::{TimeZone, Utc};
 use cron::Schedule;
 use jobx_api::dic::JobType;
-use jobx_api::dto::JobxJobModifyDto;
+use jobx_api::dto::{
+    JobxJobModifyDto, JobxOverviewActivityDto, JobxOverviewExecutorDto, JobxOverviewHourDto,
+    JobxOverviewJobsDto, JobxOverviewSummaryDto, JobxOverviewTasksDto,
+};
 use jobx_api::mo::jobx_job;
 use robotech::api;
 use robotech::cst::user_id_cst::SYS_OPERATOR_USER_ID;
@@ -11,12 +14,14 @@ use robotech::db::get_db_conn;
 use robotech::macros::svc;
 use robotech::redis::publish_to_stream_with_maxlen;
 use sea_orm::sea_query::Expr;
-use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
+use sea_orm::{
+    ActiveValue, ColumnTrait, DbBackend, EntityTrait, QueryFilter, Statement, Value,
+};
 use std::str::FromStr;
 use tracing::{info, warn};
 use wheel_rs::time_utils::now_ms;
 
-use jobx_api::dic::TaskType;
+use jobx_api::dic::{TaskStatus, TaskType};
 use jobx_api::dto::JobxTaskAddDto;
 use jobx_api::vo::JobxTaskVo;
 use crate::svc::JobxTaskSvc;
@@ -425,6 +430,8 @@ impl JobxJobSvc {
     /// - **普通任务**：`<本周期长度>` = `interval_duration`（Cron 为 0，由 `schedule.after()`
     ///   自己推进一拍）。
     /// - **高频任务**：`<本周期长度>` = `high_freq_assign_interval`。
+    ///   仅限固定间隔类计划；Cron 即便 `high_freq = true` 也按上一行走，
+    ///   保证「一拍一次」而不会把多个拍点并成一段（见 `JobType::batches_high_freq_segment`）。
     ///
     /// `assign_lead_ms` 必须补上：`calc_next_assign` 末尾会统一减一次
     /// （`next_assign_ms = next_exec_ms - assign_lead_ms`）。不补的话 `next_assign_ms`
@@ -477,7 +484,14 @@ impl JobxJobSvc {
                     .map(|v| v.value() as u64)
                     .unwrap_or(assign_lead_duration_default.as_millis() as u64);
 
-                if existing.high_freq.unwrap_or(false) {
+                // 只有固定间隔类计划会把一次分派批成一段连续执行，因此也就只有它们
+                // 按 `high_freq_assign_interval` 往前推。Cron 计划永远按拍点每拍一次：
+                // 走下面的 `interval_duration`（cron 为空 → 0）分支，
+                // 再由 `calc_next_assign` 的 `schedule.after()` 对齐到下一个拍点。
+                // 不能只看 `high_freq`：老数据里 cron 也可能带着 high_freq = true。
+                if existing.high_freq.unwrap_or(false)
+                    && existing.job_type.batches_high_freq_segment()
+                {
                     // 高频任务：本段执行时段长度就是 `high_freq_assign_interval`，
                     // 所以下一个预定执行时刻 = 上一个 + hf_interval。
                     // 与 `exec_deadline_ms`（= scheduled + hf_interval）严丝合缝：
@@ -776,6 +790,356 @@ impl JobxJobSvc {
 
         Ok(())
     }
+
+    /// # 总览统计（计划 + 24h 执行 + 执行器维度）
+    ///
+    /// 供 `GET /jobx/overview/summary` 使用。把前端原先「拉最近 500 条计划 +
+    /// 1200 条执行记录再自己聚合」的采样统计换成服务端聚合：计划数或 24h 执行量
+    /// 超过采样上限时，指标不再被低估，也省掉每 15 秒几百 KB 的列表传输。
+    ///
+    /// ## 统计口径
+    ///
+    /// - 24 小时窗口按 `assign_ms` 限定（分派时刻），不用 `exec_start_ms`；
+    /// - `running` 计入总量并单列，既不进成功也不进失败；
+    /// - `skipped` 单列，不进成功率分母；
+    /// - 成功率 = `success / (success + failed)`，没有已完成样本时为 `None`；
+    /// - 耗时分位只统计 `exec_start_ms`、`exec_end_ms` 都有的记录。
+    ///
+    /// ## 缓存
+    ///
+    /// 结果缓存 10 秒（总览页 15 秒轮询一次），避免同一批数据反复跑 5 条聚合 SQL。
+    /// 缓存只在读锁内读取/写入，不跨 `await` 持有。
+    #[db_unwrap]
+    pub async fn overview_summary<C>(db: Option<&C>) -> Result<JobxOverviewSummaryDto, SvcError>
+    where
+        C: ConnectionTrait,
+    {
+        let now = now_ms();
+        if let Some(cached) = cached_overview(now) {
+            return Ok(cached);
+        }
+
+        let window_start = (now / HOUR_MS) * HOUR_MS - (HOURS_WINDOW - 1) * HOUR_MS;
+
+        // ---- 计划维度 ----
+        let jobs_sql = "\
+            select \
+                count(*) as total, \
+                count(*) filter (where enabled) as enabled, \
+                count(*) filter (where not enabled) as disabled, \
+                count(*) filter (where job_type = $2) as manual, \
+                count(*) filter (where job_type = $3) as cron, \
+                count(*) filter (where job_type = $4) as fixed_delay, \
+                count(*) filter (where job_type = $5) as fixed_rate, \
+                count(*) filter (where high_freq) as high_freq, \
+                count(*) filter (where enabled and job_type <> $2 \
+                    and next_assign_ms is not null and next_assign_ms <= $1) as next_assign_soon \
+            from jobx_job";
+        let jobs_row = db
+            .query_all_raw(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                jobs_sql,
+                [
+                    Value::from((now + SOON_MS) as i64),
+                    Value::from(JobType::Manual.value()),
+                    Value::from(JobType::Cron.value()),
+                    Value::from(JobType::FixedDelay.value()),
+                    Value::from(JobType::FixedRate.value()),
+                ],
+            ))
+            .await
+            .map_err(|e| anyhow!("统计计划维度失败: {e}"))?
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow!("统计计划维度失败: 没有返回结果"))?;
+
+        let jobs = JobxOverviewJobsDto {
+            total: read_count(&jobs_row, "total")?,
+            enabled: read_count(&jobs_row, "enabled")?,
+            disabled: read_count(&jobs_row, "disabled")?,
+            manual: read_count(&jobs_row, "manual")?,
+            cron: read_count(&jobs_row, "cron")?,
+            fixed_delay: read_count(&jobs_row, "fixed_delay")?,
+            fixed_rate: read_count(&jobs_row, "fixed_rate")?,
+            high_freq: read_count(&jobs_row, "high_freq")?,
+            next_assign_soon: read_count(&jobs_row, "next_assign_soon")?,
+        };
+
+        // ---- 24h 执行维度 ----
+        let tasks_sql = "\
+            select \
+                count(*) as total, \
+                count(*) filter (where status = $2) as running, \
+                count(*) filter (where status = $3) as success, \
+                count(*) filter (where status = $4) as failed, \
+                count(*) filter (where status = $5) as skipped, \
+                (avg(exec_end_ms - exec_start_ms) \
+                    filter (where exec_start_ms is not null and exec_end_ms is not null))::float8 as avg, \
+                percentile_cont(0.5) within group (order by (exec_end_ms - exec_start_ms)) \
+                    filter (where exec_start_ms is not null and exec_end_ms is not null) as p50, \
+                percentile_cont(0.95) within group (order by (exec_end_ms - exec_start_ms)) \
+                    filter (where exec_start_ms is not null and exec_end_ms is not null) as p95, \
+                percentile_cont(0.99) within group (order by (exec_end_ms - exec_start_ms)) \
+                    filter (where exec_start_ms is not null and exec_end_ms is not null) as p99 \
+            from jobx_task where assign_ms >= $1";
+        let tasks_row = db
+            .query_all_raw(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                tasks_sql,
+                [
+                    Value::from(window_start as i64),
+                    Value::from(TaskStatus::Running.value()),
+                    Value::from(TaskStatus::Success.value()),
+                    Value::from(TaskStatus::Failed.value()),
+                    Value::from(TaskStatus::Skipped.value()),
+                ],
+            ))
+            .await
+            .map_err(|e| anyhow!("统计执行维度失败: {e}"))?
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow!("统计执行维度失败: 没有返回结果"))?;
+
+        let success = read_count(&tasks_row, "success")?;
+        let failed = read_count(&tasks_row, "failed")?;
+        let tasks = JobxOverviewTasksDto {
+            total: read_count(&tasks_row, "total")?,
+            running: read_count(&tasks_row, "running")?,
+            success,
+            failed,
+            skipped: read_count(&tasks_row, "skipped")?,
+            success_rate: success_rate(success, failed),
+            avg_duration_ms: read_float(&tasks_row, "avg")?,
+            p50_duration_ms: read_float(&tasks_row, "p50")?,
+            p95_duration_ms: read_float(&tasks_row, "p95")?,
+            p99_duration_ms: read_float(&tasks_row, "p99")?,
+        };
+
+        // ---- 小时趋势 ----
+        let hourly_sql = "\
+            select (assign_ms / 3600000) * 3600000 as hour_start_ms, \
+                count(*) filter (where status = $2) as success, \
+                count(*) filter (where status = $3) as failed, \
+                count(*) filter (where status = $4) as skipped \
+            from jobx_task where assign_ms >= $1 group by 1 order by 1";
+        let hourly_rows = db
+            .query_all_raw(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                hourly_sql,
+                [
+                    Value::from(window_start as i64),
+                    Value::from(TaskStatus::Success.value()),
+                    Value::from(TaskStatus::Failed.value()),
+                    Value::from(TaskStatus::Skipped.value()),
+                ],
+            ))
+            .await
+            .map_err(|e| anyhow!("统计小时趋势失败: {e}"))?;
+
+        let mut hourly: Vec<JobxOverviewHourDto> = (0..HOURS_WINDOW)
+            .map(|index| JobxOverviewHourDto {
+                hour_start_ms: window_start + index * HOUR_MS,
+                ..Default::default()
+            })
+            .collect();
+        for row in &hourly_rows {
+            let hour = read_count(row, "hour_start_ms")?;
+            if let Some(bucket) = hour_bucket(&mut hourly, hour, window_start) {
+                bucket.success = read_count(row, "success")?;
+                bucket.failed = read_count(row, "failed")?;
+                bucket.skipped = read_count(row, "skipped")?;
+            }
+        }
+
+        // ---- 执行器维度 ----
+        let executors_sql = "\
+            with j as ( \
+                select executor_code, \
+                    count(*) as jobs, \
+                    count(*) filter (where enabled) as enabled_jobs, \
+                    count(*) filter (where high_freq) as high_freq_jobs \
+                from jobx_job group by executor_code \
+            ), t as ( \
+                select executor_code, \
+                    count(*) as tasks_24h, \
+                    count(*) filter (where status = $2) as running, \
+                    count(*) filter (where status = $3) as success_24h, \
+                    count(*) filter (where status = $4) as failed_24h, \
+                    count(*) filter (where status = $5) as skipped_24h, \
+                    (avg(exec_end_ms - exec_start_ms) \
+                        filter (where exec_start_ms is not null and exec_end_ms is not null))::float8 \
+                        as avg_duration_ms, \
+                    max(coalesce(exec_start_ms, assign_ms)) as last_activity_ms \
+                from jobx_task where assign_ms >= $1 group by executor_code \
+            ) \
+            select coalesce(t.executor_code, j.executor_code) as code, \
+                coalesce(j.jobs, 0) as jobs, \
+                coalesce(j.enabled_jobs, 0) as enabled_jobs, \
+                coalesce(j.high_freq_jobs, 0) as high_freq_jobs, \
+                coalesce(t.tasks_24h, 0) as tasks_24h, \
+                coalesce(t.running, 0) as running, \
+                coalesce(t.success_24h, 0) as success_24h, \
+                coalesce(t.failed_24h, 0) as failed_24h, \
+                coalesce(t.skipped_24h, 0) as skipped_24h, \
+                t.avg_duration_ms, t.last_activity_ms \
+            from t full outer join j on t.executor_code = j.executor_code \
+            order by tasks_24h desc, code asc";
+        let executor_rows = db
+            .query_all_raw(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                executors_sql,
+                [
+                    Value::from(window_start as i64),
+                    Value::from(TaskStatus::Running.value()),
+                    Value::from(TaskStatus::Success.value()),
+                    Value::from(TaskStatus::Failed.value()),
+                    Value::from(TaskStatus::Skipped.value()),
+                ],
+            ))
+            .await
+            .map_err(|e| anyhow!("统计执行器维度失败: {e}"))?;
+
+        let mut executors: Vec<JobxOverviewExecutorDto> = executor_rows
+            .iter()
+            .map(|row| {
+                let success = read_count(row, "success_24h")?;
+                let failed = read_count(row, "failed_24h")?;
+                Ok(JobxOverviewExecutorDto {
+                    code: row
+                        .try_get_by::<String, _>("code")
+                        .map_err(|e| anyhow!("读取执行器编码失败: {e}"))?,
+                    jobs: read_count(row, "jobs")?,
+                    enabled_jobs: read_count(row, "enabled_jobs")?,
+                    high_freq_jobs: read_count(row, "high_freq_jobs")?,
+                    tasks_24h: read_count(row, "tasks_24h")?,
+                    running: read_count(row, "running")?,
+                    success_24h: success,
+                    failed_24h: failed,
+                    skipped_24h: read_count(row, "skipped_24h")?,
+                    success_rate: success_rate(success, failed),
+                    avg_duration_ms: read_float(row, "avg_duration_ms")?,
+                    last_activity_ms: read_optional_count(row, "last_activity_ms")?,
+                    activity: vec![JobxOverviewActivityDto::default(); HOURS_WINDOW as usize],
+                })
+            })
+            .collect::<Result<Vec<_>, SvcError>>()?;
+
+        // ---- 执行器小时活跃度（与 hourly 同一批桶） ----
+        let activity_sql = "\
+            select executor_code, (assign_ms / 3600000) * 3600000 as hour_start_ms, \
+                count(*) as cnt, count(*) filter (where status = $2) as failed \
+            from jobx_task where assign_ms >= $1 group by 1, 2";
+        let activity_rows = db
+            .query_all_raw(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                activity_sql,
+                [
+                    Value::from(window_start as i64),
+                    Value::from(TaskStatus::Failed.value()),
+                ],
+            ))
+            .await
+            .map_err(|e| anyhow!("统计执行器活跃度失败: {e}"))?;
+
+        for row in &activity_rows {
+            let code = row
+                .try_get_by::<String, _>("executor_code")
+                .map_err(|e| anyhow!("读取执行器编码失败: {e}"))?;
+            let hour = read_count(row, "hour_start_ms")?;
+            let Some(index) = hour_index(hour, window_start) else {
+                continue;
+            };
+            if let Some(executor) = executors.iter_mut().find(|item| item.code == code) {
+                executor.activity[index] = JobxOverviewActivityDto {
+                    count: read_count(row, "cnt")?,
+                    failed: read_count(row, "failed")?,
+                };
+            }
+        }
+
+        let summary = JobxOverviewSummaryDto {
+            generated_at_ms: now,
+            window_start_ms: window_start,
+            jobs,
+            tasks,
+            hourly,
+            executors,
+        };
+        if let Ok(mut guard) = overview_cache().lock() {
+            *guard = Some(summary.clone());
+        }
+
+        Ok(summary)
+    }
+}
+
+/// 统计窗口的小时数
+const HOURS_WINDOW: u64 = 24;
+/// 一小时的毫秒数
+const HOUR_MS: u64 = 3_600_000;
+/// 「即将分派」的提前量
+const SOON_MS: u64 = 60_000;
+/// 总览统计的进程内缓存时长（总览页 15s 轮询，10s 足够挡住重复计算）
+const OVERVIEW_CACHE_TTL_MS: u64 = 10_000;
+
+/// 总览统计的进程内缓存
+static OVERVIEW_CACHE: std::sync::OnceLock<std::sync::Mutex<Option<JobxOverviewSummaryDto>>> =
+    std::sync::OnceLock::new();
+
+fn overview_cache() -> &'static std::sync::Mutex<Option<JobxOverviewSummaryDto>> {
+    OVERVIEW_CACHE.get_or_init(|| std::sync::Mutex::new(None))
+}
+
+/// 命中缓存则返回上一次的统计结果
+fn cached_overview(now: u64) -> Option<JobxOverviewSummaryDto> {
+    let guard = overview_cache().lock().ok()?;
+    let cached = guard.as_ref()?;
+    (now < cached.generated_at_ms.saturating_add(OVERVIEW_CACHE_TTL_MS)).then(|| cached.clone())
+}
+
+/// 读取计数列（`count(*)` 是 bigint），负数一律按 0 处理
+fn read_count(row: &sea_orm::QueryResult, name: &str) -> Result<u64, SvcError> {
+    let value = row
+        .try_get_by::<i64, _>(name)
+        .map_err(|e| anyhow!("读取统计字段 {name} 失败: {e}"))?;
+    Ok(value.max(0) as u64)
+}
+
+/// 读取可空计数列
+fn read_optional_count(row: &sea_orm::QueryResult, name: &str) -> Result<Option<u64>, SvcError> {
+    let value = row
+        .try_get_by::<Option<i64>, _>(name)
+        .map_err(|e| anyhow!("读取统计字段 {name} 失败: {e}"))?;
+    Ok(value.map(|value| value.max(0) as u64))
+}
+
+/// 读取浮点列（分位/平均值）并取整成毫秒
+fn read_float(row: &sea_orm::QueryResult, name: &str) -> Result<Option<u64>, SvcError> {
+    let value = row
+        .try_get_by::<Option<f64>, _>(name)
+        .map_err(|e| anyhow!("读取统计字段 {name} 失败: {e}"))?;
+    Ok(value.map(|value| value.max(0.0).round() as u64))
+}
+
+/// 成功率：只按成功 + 失败做分母，跳过的和运行中的都不算
+fn success_rate(success: u64, failed: u64) -> Option<i32> {
+    let done = success + failed;
+    (done > 0).then(|| ((success as f64 / done as f64) * 100.0).round() as i32)
+}
+
+/// 把小时时间戳换算成窗口内的桶下标
+fn hour_index(hour_ms: u64, window_start: u64) -> Option<usize> {
+    let offset = hour_ms.checked_sub(window_start)? / HOUR_MS;
+    (offset < HOURS_WINDOW).then_some(offset as usize)
+}
+
+/// 取窗口内的小时桶
+fn hour_bucket<'a>(
+    hourly: &'a mut [JobxOverviewHourDto],
+    hour_ms: u64,
+    window_start: u64,
+) -> Option<&'a mut JobxOverviewHourDto> {
+    hour_index(hour_ms, window_start).and_then(move |index| hourly.get_mut(index))
 }
 
 /// # 调度计算与兜底逻辑的测试
@@ -1149,6 +1513,52 @@ create table jobx_job (
         // 真正有物理意义的是执行时刻：间距应当严格等于 hf_interval，
         // 也正好是上一段 exec_deadline_ms 的位置（scheduled + hf_interval）
         assert_eq!((next + lead) - (start + lead), hf_interval);
+    }
+
+    /// 高频 Cron 推进：只前进到下一个 cron 拍点，不按 `high_freq_assign_interval` 批量跳过
+    ///
+    /// 10 秒一次的 cron 不该被当成「一段 5 分钟」，否则 5 分钟内的 30 个拍点会被合成一段循环。
+    #[tokio::test]
+    async fn recalc_advances_high_freq_cron_by_beat() {
+        let _guard = DB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        init_scheduler_config();
+        let Some(db) = connect_test_db().await else {
+            return;
+        };
+        reset_table(&db).await;
+
+        let start = 1_800_000_000_000i64;
+        let lead = 60_000i64;
+        insert_job(
+            &db,
+            1,
+            "hf-cron",
+            1,
+            true,
+            Some("*/10 * * * * *"),
+            None,
+            Some(60_000),
+            Some(start),
+            true,
+        )
+        .await;
+
+        JobxJobSvc::recalc_next_assign_ms(U64::from(1u64), Some(&db))
+            .await
+            .expect("推进失败");
+
+        let job = load_job(&db, 1).await;
+        let next = job.next_assign_ms.map(|v| v.value()).unwrap() as i64;
+        // next_assign 是分派时刻，预定执行时刻 = next_assign + lead
+        assert_eq!(
+            next + lead,
+            start + 70_000,
+            "高频 cron 的预定执行时刻应落在下一个拍点（10s）上"
+        );
+        assert!(
+            next + lead < start + 300_000,
+            "高频 cron 不能按 high_freq_assign_interval 批量跳过拍点"
+        );
     }
 
     /// Cron 任务推进后仍落在 cron 拍点上

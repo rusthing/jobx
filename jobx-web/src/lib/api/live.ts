@@ -8,6 +8,7 @@ import type {
   Job,
   JobInput,
   JobQuery,
+  OverviewSummary,
   Page,
   Task,
   TaskQuery,
@@ -58,10 +59,11 @@ function jobQuery(query: JobQuery) {
 }
 
 /**
- * jobx_task 的 DAO 没有配置 `like_columns`，所以 `_keyword` 对任务列表是空操作
- * （服务端不会报错，但也不会过滤）。在前端把「执行 ID / 执行器」的关键字翻译成
- * 真实可用的字段条件：纯数字按 ID 精确匹配，其余按执行器编码模糊匹配。
- * 后端补上 `like_columns` 后，这里可以退回 `_keyword`。
+ * 执行列表的关键字搜索。
+ *
+ * `jobx_task` 的 `like_columns` 只开了 `executor_code`（长文本 `exec_detail` 不进 LIKE，
+ * 避免大表顺序扫描），而关键字还允许直接粘一个「执行 ID」。所以这里拆成两种条件：
+ * 纯数字按 `id` 精确匹配，其余按 `executor_code` 模糊匹配。
  */
 function taskQuery(query: TaskQuery) {
   const {
@@ -129,6 +131,11 @@ export const liveTasks = {
   get: (id: string) => request<Task>(`/jobx/task/${id}`),
 
   remove: (id: string) => request<null>(`/jobx/task/${id}`, { method: "DELETE" }),
+};
+
+export const liveOverview = {
+  /** 服务端聚合的总览指标（计划 / 24h 执行 / 小时趋势 / 执行器） */
+  summary: () => request<OverviewSummary>("/jobx/overview/summary"),
 };
 
 export const liveGroups = {

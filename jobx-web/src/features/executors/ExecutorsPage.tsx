@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { ArrowUpRight, Boxes, CircleSlash, Cpu, Gauge, Timer, Zap } from "lucide-react";
 import { PageHeader, StatCard } from "@/components/page";
@@ -13,18 +12,8 @@ import { cn } from "@/lib/utils";
 import { setDataMode } from "@/lib/api";
 
 export function ExecutorsPage() {
-  const { data, tasks, isLoading, error, refetch } = useOverview();
+  const { data, isLoading, error, refetch } = useOverview();
   const now = useNow(5_000);
-
-  const tasksByExecutor = useMemo(() => {
-    const map = new Map<string, typeof tasks>();
-    for (const task of tasks) {
-      const list = map.get(task.executorCode);
-      if (list) list.push(task);
-      else map.set(task.executorCode, [task]);
-    }
-    return map;
-  }, [tasks]);
 
   if (error && !data) {
     return (
@@ -65,21 +54,14 @@ export function ExecutorsPage() {
   }
 
   const executors = data.executors;
-  const totalTasks = executors.reduce((acc, item) => acc + item.tasks24h, 0);
-  const weightedRate = totalTasks
-    ? Math.round(
-        executors.reduce(
-          (acc, item) => acc + (item.successRate ?? 0) * item.tasks24h,
-          0,
-        ) / totalTasks,
-      )
-    : null;
+  const totalTasks = data.tasks.total;
+  const overallRate = data.tasks.successRate;
   const weightedTone =
-    weightedRate === null
+    overallRate === null
       ? "default"
-      : weightedRate >= 98
+      : overallRate >= 98
         ? "success"
-        : weightedRate >= 90
+        : overallRate >= 90
           ? "warn"
           : "danger";
 
@@ -101,22 +83,22 @@ export function ExecutorsPage() {
           value={executors.length}
           suffix="个"
           icon={<Boxes className="size-3.5" />}
-          footer={`${executors.reduce((acc, item) => acc + item.jobCount, 0)} 条计划分布其上`}
+          footer={`${data.jobs.total} 条计划分布其上`}
         />
         <StatCard
           label="24h 执行总量"
           value={totalTasks}
           suffix="条"
           icon={<Cpu className="size-3.5" />}
-          footer={`${data.running} 条正在运行`}
+          footer={`${data.tasks.running} 条正在运行 · ${data.tasks.skipped} 条跳过`}
         />
         <StatCard
           label="整体成功率"
-          value={weightedRate ?? "--"}
-          suffix={weightedRate === null ? undefined : "%"}
+          value={overallRate ?? "--"}
+          suffix={overallRate === null ? undefined : "%"}
           accent={weightedTone}
           icon={<Gauge className="size-3.5" />}
-          footer={`按执行量加权 · 失败 ${data.failed24h} 条`}
+          footer={`成功 ${data.tasks.success} · 失败 ${data.tasks.failed} 条`}
         />
       </div>
 
@@ -172,10 +154,10 @@ export function ExecutorsPage() {
                       <h2 className="truncate font-mono text-[13.5px] font-semibold text-ink">
                         {executor.code}
                       </h2>
-                      {executor.highFreqCount > 0 && (
+                      {executor.highFreqJobs > 0 && (
                         <Badge tone="violet">
                           <Zap className="size-2.5" />
-                          {executor.highFreqCount}
+                          {executor.highFreqJobs}
                         </Badge>
                       )}
                     </div>
@@ -196,7 +178,7 @@ export function ExecutorsPage() {
 
                 <div className="mt-3 grid grid-cols-3 gap-px overflow-hidden border-y border-line bg-line/60 text-center">
                   {[
-                    { label: "计划", value: `${executor.enabledCount}/${executor.jobCount}` },
+                    { label: "计划", value: `${executor.enabledJobs}/${executor.jobs}` },
                     { label: "24h 执行", value: String(executor.tasks24h) },
                     { label: "运行中", value: String(executor.running) },
                   ].map((item) => (
@@ -215,6 +197,9 @@ export function ExecutorsPage() {
                       {executor.failed24h > 0 && (
                         <span className="ml-1 text-danger">· {executor.failed24h} 失败</span>
                       )}
+                      {executor.skipped24h > 0 && (
+                        <span className="ml-1 text-muted">· {executor.skipped24h} 跳过</span>
+                      )}
                     </span>
                   </div>
                   <div className="mt-1.5 flex h-1.5 overflow-hidden rounded-full bg-sunken">
@@ -231,7 +216,10 @@ export function ExecutorsPage() {
                   </div>
 
                   <div className="mt-3 flex items-end justify-between gap-3">
-                    <ActivityStrip tasks={tasksByExecutor.get(executor.code) ?? []} now={now} />
+                    <ActivityStrip
+                      activity={executor.activity}
+                      windowStartMs={data.windowStartMs}
+                    />
                     <span className="shrink-0 text-[10px] text-muted">24h 活跃度</span>
                   </div>
 

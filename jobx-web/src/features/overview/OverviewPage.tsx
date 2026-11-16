@@ -32,6 +32,20 @@ const TYPE_COLORS: Record<JobType, string> = {
   [JOB_TYPE.manual]: "#b8bdb2",
 };
 
+/** 把调度类型映射到统计接口 `jobs` 上的字段名 */
+function typeKeyOf(type: JobType): "cron" | "fixedDelay" | "fixedRate" | "manual" {
+  switch (type) {
+    case JOB_TYPE.cron:
+      return "cron";
+    case JOB_TYPE.fixedDelay:
+      return "fixedDelay";
+    case JOB_TYPE.fixedRate:
+      return "fixedRate";
+    default:
+      return "manual";
+  }
+}
+
 function failureText(detail: string | null): string {
   if (!detail) return "执行器未上报详情";
   try {
@@ -43,12 +57,28 @@ function failureText(detail: string | null): string {
 }
 
 export function OverviewPage() {
-  const { data, jobs, isLoading, error, refetch } = useOverview();
+  const { data, jobs, failures, isLoading, error, refetch } = useOverview();
   const now = useNow(1_000);
   const toast = useToast();
   const { trigger } = useJobMutations();
 
   const jobById = useMemo(() => new Map(jobs.map((job) => [job.id, job])), [jobs]);
+
+  /**
+   * 「即将分派」仍取自计划列表接口：列表按 `next_assign_ms:asc` 取 500 条，
+   * 前几条就是最早要分派的，比进统计接口更直接。
+   */
+  const upcoming = useMemo(
+    () =>
+      jobs
+        .filter((job) => job.enabled)
+        .map((job) => ({ job, at: Number(job.nextAssignMs) }))
+        .filter((item) => item.job.nextAssignMs !== null && item.at > now - 60_000)
+        .sort((a, b) => a.at - b.at)
+        .slice(0, 6)
+        .map((item) => item.job),
+    [jobs, now],
+  );
 
   const fire = (id: string, name: string) => {
     trigger.mutate(id, {
@@ -110,10 +140,11 @@ export function OverviewPage() {
     JOB_TYPE.fixedDelay,
     JOB_TYPE.fixedRate,
     JOB_TYPE.manual,
-  ] as JobType[]).map((type) => ({ type, count: data.typeCount[type] }));
+  ] as JobType[]).map((type) => ({ type, count: data.jobs[typeKeyOf(type)] }));
 
   const successTotal = data.hourly.reduce((acc, bucket) => acc + bucket.success, 0);
   const failedTotal = data.hourly.reduce((acc, bucket) => acc + bucket.failed, 0);
+  const completedTotal = data.tasks.success + data.tasks.failed;
 
   return (
     <>
@@ -121,16 +152,16 @@ export function OverviewPage() {
         title="调度总览"
         subtitle={
           <>
-            最近 24 小时 · {data.completed24h} 条执行完成，{data.running} 条运行中 ·
-            指标由最近 1200 条执行记录聚合
+            最近 24 小时 · {completedTotal} 条执行完成，{data.tasks.running} 条运行中
+            {data.tasks.skipped > 0 && `，${data.tasks.skipped} 条跳过`}
           </>
         }
         actions={
           <>
-            {data.highFreqJobs > 0 && (
+            {data.jobs.highFreq > 0 && (
               <Badge tone="violet">
                 <Zap className="size-2.5" />
-                {data.highFreqJobs} 个高频计划
+                {data.jobs.highFreq} 个高频计划
               </Badge>
             )}
             <Link
@@ -147,29 +178,29 @@ export function OverviewPage() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="启用的任务计划"
-          value={data.enabledJobs}
-          suffix={`/ ${data.totalJobs}`}
+          value={data.jobs.enabled}
+          suffix={`/ ${data.jobs.total}`}
           icon={<CalendarClock className="size-3.5" />}
           footer={
             <span className="flex items-center gap-2">
-              <span className="text-ink-soft">{data.pausedJobs} 个已停用</span>
+              <span className="text-ink-soft">{data.jobs.disabled} 个已停用</span>
               <span className="text-line-strong">·</span>
-              <span className="font-mono text-[10.5px]">{data.highFreqJobs} 高频</span>
+              <span className="font-mono text-[10.5px]">{data.jobs.highFreq} 高频</span>
             </span>
           }
         />
         <StatCard
           label="正在执行"
-          value={data.running}
+          value={data.tasks.running}
           suffix="条"
-          accent={data.running > 0 ? "warn" : "default"}
+          accent={data.tasks.running > 0 ? "warn" : "default"}
           icon={<Timer className="size-3.5" />}
           footer={
             <span className="flex items-center justify-between">
               <span>
-                已分派待执行 {data.queued} 条
-                {data.stale > 0 && (
-                  <span className="text-danger"> · {data.stale} 条疑似僵死</span>
+                24h 跳过 {data.tasks.skipped} 条
+                {data.jobs.nextAssignSoon > 0 && (
+                  <span className="text-muted"> · {data.jobs.nextAssignSoon} 条待分派</span>
                 )}
               </span>
               <span className="inline-flex items-center gap-1 text-warn">
@@ -183,14 +214,14 @@ export function OverviewPage() {
         />
         <StatCard
           label="24h 成功率"
-          value={data.successRate ?? "--"}
-          suffix={data.successRate === null ? undefined : "%"}
+          value={data.tasks.successRate ?? "--"}
+          suffix={data.tasks.successRate === null ? undefined : "%"}
           accent={
-            data.successRate === null
+            data.tasks.successRate === null
               ? "default"
-              : data.successRate >= 98
+              : data.tasks.successRate >= 98
                 ? "success"
-                : data.successRate >= 90
+                : data.tasks.successRate >= 90
                   ? "warn"
                   : "danger"
           }
@@ -198,19 +229,20 @@ export function OverviewPage() {
           footer={
             <span className="flex items-center justify-between gap-2">
               <span>
-                成功 {data.success24h} · 失败 <span className="text-danger">{data.failed24h}</span>
+                成功 {data.tasks.success} · 失败{" "}
+                <span className="text-danger">{data.tasks.failed}</span>
               </span>
-              <span className="font-mono text-[10.5px]">{data.completed24h} 完成</span>
+              <span className="font-mono text-[10.5px]">{completedTotal} 完成</span>
             </span>
           }
         />
         <StatCard
           label="执行耗时 P95"
-          value={formatDuration(data.p95DurationMs).replace(/\s/g, "")}
+          value={formatDuration(data.tasks.p95DurationMs).replace(/\s/g, "")}
           icon={<Timer className="size-3.5" />}
           footer={
             <span className="flex items-center justify-between">
-              <span>均值 {formatDuration(data.avgDurationMs).replace(/\s/g, "")}</span>
+              <span>均值 {formatDuration(data.tasks.avgDurationMs).replace(/\s/g, "")}</span>
               <span className="font-mono text-[10.5px]">exec_end − exec_start</span>
             </span>
           }
@@ -241,7 +273,7 @@ export function OverviewPage() {
                 count > 0 ? (
                   <div
                     key={type}
-                    style={{ width: `${percent(count, data.totalJobs)}%`, background: TYPE_COLORS[type] }}
+                    style={{ width: `${percent(count, data.jobs.total)}%`, background: TYPE_COLORS[type] }}
                     className="h-full first:rounded-l-full last:rounded-r-full"
                   />
                 ) : null,
@@ -257,7 +289,7 @@ export function OverviewPage() {
                   />
                   <span className="text-[12.5px] text-ink-soft">{JOB_TYPE_META[type].label}</span>
                   <span className="ml-auto tnum font-mono text-[11.5px] text-muted">
-                    {count} · {percent(count, data.totalJobs)}%
+                    {count} · {percent(count, data.jobs.total)}%
                   </span>
                 </li>
               ))}
@@ -266,12 +298,12 @@ export function OverviewPage() {
             <div className="mt-4 rounded-lg border border-line bg-sunken/70 px-3 py-2.5">
               <div className="flex items-center justify-between text-[11.5px]">
                 <span className="text-muted">启用率</span>
-                <span className="tnum font-mono text-ink">{percent(data.enabledJobs, data.totalJobs)}%</span>
+                <span className="tnum font-mono text-ink">{percent(data.jobs.enabled, data.jobs.total)}%</span>
               </div>
               <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-line">
                 <div
                   className="h-full rounded-full bg-accent"
-                  style={{ width: `${percent(data.enabledJobs, data.totalJobs)}%` }}
+                  style={{ width: `${percent(data.jobs.enabled, data.jobs.total)}%` }}
                 />
               </div>
               <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
@@ -296,11 +328,11 @@ export function OverviewPage() {
               </Link>
             }
           />
-          {data.upcoming.length === 0 ? (
+          {upcoming.length === 0 ? (
             <PanelState compact title="没有待分派的计划" description="所有计划都已停用，或调度已超出有效窗口。" />
           ) : (
             <ul className="divide-y divide-line/70">
-              {data.upcoming.map((job) => {
+              {upcoming.map((job) => {
                 const countdown = formatCountdown(job.nextAssignMs, now);
                 const urgent = (Number(job.nextAssignMs) - now) < 60_000;
                 return (
@@ -356,7 +388,7 @@ export function OverviewPage() {
         <Panel className="lg:col-span-5">
           <PanelHeader
             title="最近失败"
-            subtitle={`24h 内 ${data.failed24h} 条`}
+            subtitle={`24h 内 ${data.tasks.failed} 条`}
             actions={
               <Link
                 to="/tasks?status=2"
@@ -366,11 +398,11 @@ export function OverviewPage() {
               </Link>
             }
           />
-          {data.recentFailures.length === 0 ? (
+          {failures.length === 0 ? (
             <PanelState compact title="没有失败记录" description="最近 24 小时内的执行都成功了。" />
           ) : (
             <ul className="divide-y divide-line/70">
-              {data.recentFailures.map((task) => {
+              {failures.map((task) => {
                 const job = task.jobId ? jobById.get(task.jobId) : undefined;
                 return (
                   <li key={task.id} className="px-4 py-2.5">
@@ -395,8 +427,11 @@ export function OverviewPage() {
       </div>
 
       <p className="mt-4 text-[10.5px] leading-relaxed text-muted/80">
-        数据口径：计划来自 <code className="font-mono">/jobx/job/list</code>，执行记录来自{" "}
-        <code className="font-mono">/jobx/task/list</code>（最近 1200 条）。失败详情取自{" "}
+        数据口径：计划、24h 执行趋势与执行器维度来自{" "}
+        <code className="font-mono">/jobx/overview/summary</code>（24h 按分派时刻划分，运行中计入总量但不进成功率），
+        「即将分派」与「最近失败」分别取自{" "}
+        <code className="font-mono">/jobx/job/search/page</code>、
+        <code className="font-mono">/jobx/task/search/page</code>。失败详情取自{" "}
         <code className="font-mono">exec_detail</code>，原样展示、不做美化。
       </p>
     </>

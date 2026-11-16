@@ -1,9 +1,7 @@
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/time";
-import type { HourBucket } from "@/lib/metrics";
-import type { Task } from "@/lib/api";
-import { TASK_STATUS } from "@/lib/api";
+import type { OverviewActivity, OverviewHour } from "@/lib/api";
 
 /** 迷你趋势线：面板右上角的“最近还好吗” */
 export function Sparkline({
@@ -74,7 +72,7 @@ function niceStep(value: number): number {
 }
 
 /** 24 小时执行趋势：成功/失败堆叠柱，悬停出明细 */
-export function TrendChart({ buckets, className }: { buckets: HourBucket[]; className?: string }) {
+export function TrendChart({ buckets, className }: { buckets: OverviewHour[]; className?: string }) {
   const CHART_H = 152;
   const rawMax = Math.max(1, ...buckets.map((bucket) => bucket.success + bucket.failed));
   const step = niceStep(rawMax / 4);
@@ -113,16 +111,19 @@ export function TrendChart({ buckets, className }: { buckets: HourBucket[]; clas
                 const successPx = (bucket.success / niceMax) * CHART_H;
                 return (
                   <div
-                    key={bucket.hourMs}
+                    key={bucket.hourStartMs}
                     className="group relative flex h-full flex-1 flex-col justify-end"
                   >
                     <div className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-20 hidden -translate-x-1/2 whitespace-nowrap rounded-lg border border-line bg-surface px-2.5 py-1.5 text-left shadow-float group-hover:block">
                       <div className="font-mono text-[11px] text-ink">
-                        {formatTime(bucket.hourMs, false)} – {formatTime(bucket.hourMs + 3_600_000, false)}
+                        {formatTime(bucket.hourStartMs, false)} – {formatTime(bucket.hourStartMs + 3_600_000, false)}
                       </div>
                       <div className="mt-1 flex items-center gap-2 text-[11px]">
                         <span className="text-success">成功 {bucket.success}</span>
                         <span className="text-danger">失败 {bucket.failed}</span>
+                        {bucket.skipped > 0 && (
+                          <span className="text-muted">跳过 {bucket.skipped}</span>
+                        )}
                       </div>
                     </div>
 
@@ -152,7 +153,7 @@ export function TrendChart({ buckets, className }: { buckets: HourBucket[]; clas
 
           <div className="mt-1.5 flex justify-between font-mono text-[10px] text-muted/80">
             {[0, 6, 12, 18, 23].map((index) => (
-              <span key={index}>{formatTime(buckets[index]?.hourMs ?? 0, false)}</span>
+              <span key={index}>{formatTime(buckets[index]?.hourStartMs ?? 0, false)}</span>
             ))}
           </div>
         </div>
@@ -171,21 +172,29 @@ export function TrendChart({ buckets, className }: { buckets: HourBucket[]; clas
   );
 }
 
-/** 执行器活跃度条：24 格，每格里叠当小时的成功/失败密度 */
-export function ActivityStrip({ tasks, now }: { tasks: Task[]; now: number }) {
+/**
+ * 执行器活跃度条：24 格，每格里叠当小时的成功/失败密度。
+ *
+ * 数据直接取服务端 `executor.activity`（与 `windowStartMs` 对齐的 24 个桶），
+ * 不再需要拉一批执行记录在浏览器里分桶。
+ */
+export function ActivityStrip({
+  activity,
+  windowStartMs,
+}: {
+  activity: OverviewActivity[];
+  windowStartMs: number;
+}) {
   const HOUR = 3_600_000;
   const slots = 24;
-  const start = Math.floor((now - (slots - 1) * HOUR) / HOUR) * HOUR;
 
   const cells = Array.from({ length: slots }, (_, index) => {
-    const from = start + index * HOUR;
-    const to = from + HOUR;
-    const bucket = tasks.filter((task) => {
-      const time = Number(task.execStartMs ?? task.assignMs);
-      return time >= from && time < to;
-    });
-    const failed = bucket.filter((task) => task.status === TASK_STATUS.failed).length;
-    return { from, count: bucket.length, failed };
+    const cell = activity[index];
+    return {
+      from: windowStartMs + index * HOUR,
+      count: cell?.count ?? 0,
+      failed: cell?.failed ?? 0,
+    };
   });
 
   const max = Math.max(1, ...cells.map((cell) => cell.count));

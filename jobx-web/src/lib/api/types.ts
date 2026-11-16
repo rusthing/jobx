@@ -18,11 +18,18 @@ export const JOB_TYPE = {
 
 export type JobType = (typeof JOB_TYPE)[keyof typeof JOB_TYPE];
 
-/** 执行状态：0 运行中 / 1 成功 / 2 失败 */
+/** 执行状态：0 运行中 / 1 成功 / 2 失败 / 3 跳过 */
 export const TASK_STATUS = {
   running: 0,
   success: 1,
   failed: 2,
+  /**
+   * 跳过：一次分派被领走但一次都没执行。
+   *
+   * 高频任务开始执行时已经越过本段执行截止时刻（调度积压/排队），
+   * 或首轮开始前就收到停机信号。既不算成功也不算失败。
+   */
+  skipped: 3,
 } as const;
 
 export type TaskStatus = (typeof TASK_STATUS)[keyof typeof TASK_STATUS];
@@ -196,14 +203,90 @@ export const JOB_TYPE_META: Record<
 
 export const TASK_STATUS_META: Record<
   TaskStatus,
-  { label: string; tone: "info" | "success" | "danger" }
+  { label: string; tone: "info" | "success" | "danger" | "muted" }
 > = {
   0: { label: "运行中", tone: "info" },
   1: { label: "成功", tone: "success" },
   2: { label: "失败", tone: "danger" },
+  3: { label: "跳过", tone: "muted" },
 };
 
 export const TASK_TYPE_META: Record<TaskType, { label: string }> = {
   1: { label: "立即执行" },
   2: { label: "计划执行" },
 };
+
+/**
+ * 服务端总览统计（`GET /jobx/overview/summary`）。
+ *
+ * 与实体 VO 不同，这里的数值都是普通 JSON number（计数、毫秒时间戳都远小于 2^53），
+ * 可以直接参与计算。口径由后端统一：24h 窗口按 `assignMs` 划分，`running` 计入总量
+ * 但单独成列，`skipped` 不进成功率分母。
+ */
+export interface OverviewJobs {
+  total: number;
+  enabled: number;
+  disabled: number;
+  manual: number;
+  cron: number;
+  fixedDelay: number;
+  fixedRate: number;
+  highFreq: number;
+  /** 60 秒内即将分派的非手动计划数 */
+  nextAssignSoon: number;
+}
+
+export interface OverviewTasks {
+  /** 24h 内分派的任务总数（含运行中与跳过） */
+  total: number;
+  running: number;
+  success: number;
+  failed: number;
+  /** 一次都没执行（越过执行截止时刻 / 停机），不进成功率分母 */
+  skipped: number;
+  /** 没有已完成样本时为 null */
+  successRate: number | null;
+  avgDurationMs: number | null;
+  p50DurationMs: number | null;
+  p95DurationMs: number | null;
+  p99DurationMs: number | null;
+}
+
+export interface OverviewHour {
+  hourStartMs: number;
+  success: number;
+  failed: number;
+  skipped: number;
+}
+
+export interface OverviewActivity {
+  count: number;
+  failed: number;
+}
+
+export interface OverviewExecutor {
+  code: string;
+  jobs: number;
+  enabledJobs: number;
+  highFreqJobs: number;
+  tasks24h: number;
+  running: number;
+  success24h: number;
+  failed24h: number;
+  skipped24h: number;
+  successRate: number | null;
+  avgDurationMs: number | null;
+  lastActivityMs: number | null;
+  /** 固定 24 个桶，与 `hourly` 对齐 */
+  activity: OverviewActivity[];
+}
+
+export interface OverviewSummary {
+  generatedAtMs: number;
+  /** 24h 窗口起点（整点），`hourly` 与 `activity` 的第 0 个桶都从这里开始 */
+  windowStartMs: number;
+  jobs: OverviewJobs;
+  tasks: OverviewTasks;
+  hourly: OverviewHour[];
+  executors: OverviewExecutor[];
+}

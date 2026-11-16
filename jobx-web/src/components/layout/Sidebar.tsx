@@ -26,8 +26,8 @@ export function Sidebar() {
   const { data } = useOverview();
   const toast = useToast();
 
-  const running = data?.running ?? 0;
-  const jobs = data?.totalJobs ?? 0;
+  const running = data?.tasks.running ?? 0;
+  const jobs = data?.jobs.total ?? 0;
 
   const toggle = () => {
     const next: DataMode = mode === "mock" ? "live" : "mock";
