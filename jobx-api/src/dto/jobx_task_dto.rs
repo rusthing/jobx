@@ -8,7 +8,7 @@ pub struct JobxTaskDto {
     pub task_type: TaskType,
     /// 任务计划ID
     pub job_id: Option<u64>,
-    /// 任务状态: 0=运行中, 1=成功, 2=失败
+    /// 任务状态: 0=运行中, 1=成功, 2=失败, 3=跳过
     #[db_default]
     pub status: TaskStatus,
     /// 分派时间戳
