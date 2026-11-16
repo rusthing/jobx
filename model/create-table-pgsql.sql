@@ -306,6 +306,41 @@ id
 );
 
 /*==============================================================*/
+/* Index: jobx_task_AK                                          */
+/*==============================================================*/
+create unique index jobx_task_AK on jobx_task (
+job_id,
+scheduled_exec_start_ms
+);
+
+/*==============================================================*/
+/* Index: idx_jobx_task_assign_ms                               */
+/*==============================================================*/
+create  index idx_jobx_task_assign_ms on jobx_task (
+assign_ms
+);
+
+/*==============================================================*/
+/* Index: idx_jobx_task_job_create                              */
+/*==============================================================*/
+create  index idx_jobx_task_job_create on jobx_task (
+job_id,
+create_ms
+);
+
+/*==============================================================*/
+/* Index: idx_jobx_task_running                                 */
+/*==============================================================*/
+/* 部分索引：PowerDesigner 物理模型不表达 WHERE 条件，模型里按普通索引建立，
+   实际定义（含 WHERE）见 jobx-svr/migrations/pgsql/20261109000001_create-index.sql：
+   create index idx_jobx_task_running on jobx_task (exec_start_ms, scheduled_exec_start_ms)
+       where status = 0 and exec_end_ms is null; */
+create  index idx_jobx_task_running on jobx_task (
+exec_start_ms,
+scheduled_exec_start_ms
+);
+
+/*==============================================================*/
 /* Index: jobx_group_PK                                         */
 /*==============================================================*/
 create unique index jobx_group_PK on jobx_group (

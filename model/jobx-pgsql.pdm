@@ -5073,6 +5073,35 @@ DAT 1788921306</a:History>
 </o:IndexColumn>
 </c:IndexColumns>
 </o:Index>
+<o:Index Id="o102">
+<a:ObjectID>D86FF406-4165-4532-BA2C-FEB3B8036918</a:ObjectID>
+<a:Name>Relationship_2_FK</a:Name>
+<a:Code>Relationship_2_FK</a:Code>
+<a:CreationDate>1794787905</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1794787905</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:GlobalObjectID/>
+<c:LinkedObject>
+<o:Reference Ref="o90"/>
+</c:LinkedObject>
+<c:IndexColumns>
+<o:IndexColumn Id="o103">
+<a:ObjectID>384A40C8-D97E-4489-9909-5D9E09C501E9</a:ObjectID>
+<a:CreationDate>1794787905</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1794787905</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:GlobalObjectID/>
+<c:Column>
+<o:Column Ref="o75"/>
+</c:Column>
+<c:Elements>
+<o:Column Ref="o75"/>
+</c:Elements>
+</o:IndexColumn>
+</c:IndexColumns>
+</o:Index>
 </c:Indexes>
 <c:PrimaryKey>
 <o:Key Ref="o31"/>
@@ -5595,6 +5624,115 @@ INS COLNCOL {9F179AF6-780C-40D0-BF53-7C215049614D}</a:History>
 <a:CreationDate>1791801958</a:CreationDate>
 <a:Creator>张柏子</a:Creator>
 <a:ModificationDate>1791801959</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:GlobalObjectID/>
+<c:Column>
+<o:Column Ref="o42"/>
+</c:Column>
+<c:Elements>
+<o:Column Ref="o42"/>
+</c:Elements>
+</o:IndexColumn>
+</c:IndexColumns>
+</o:Index>
+<o:Index Id="o100">
+<a:ObjectID>A665A42A-9112-42CE-9157-B91451CAE954</a:ObjectID>
+<a:Name>idx_jobx_task_assign_ms</a:Name>
+<a:Code>idx_jobx_task_assign_ms</a:Code>
+<a:CreationDate>1794787905</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1794787905</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:GlobalObjectID/>
+<c:IndexColumns>
+<o:IndexColumn Id="o101">
+<a:ObjectID>F3181162-E252-41E8-8615-8E8678BD2420</a:ObjectID>
+<a:CreationDate>1794787905</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1794787905</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:GlobalObjectID/>
+<c:Column>
+<o:Column Ref="o41"/>
+</c:Column>
+<c:Elements>
+<o:Column Ref="o41"/>
+</c:Elements>
+</o:IndexColumn>
+</c:IndexColumns>
+</o:Index>
+<o:Index Id="o201">
+<a:ObjectID>F2B4B75C-EDCE-4D1C-9284-1EF869796BE6</a:ObjectID>
+<a:Name>idx_jobx_task_job_create</a:Name>
+<a:Code>idx_jobx_task_job_create</a:Code>
+<a:CreationDate>1794787905</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1794787905</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:GlobalObjectID/>
+<c:IndexColumns>
+<o:IndexColumn Id="o202">
+<a:ObjectID>3385010B-E90A-4DF0-B29E-D0B121072C8A</a:ObjectID>
+<a:CreationDate>1794787905</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1794787905</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:GlobalObjectID/>
+<c:Column>
+<o:Column Ref="o39"/>
+</c:Column>
+<c:Elements>
+<o:Column Ref="o39"/>
+</c:Elements>
+</o:IndexColumn>
+<o:IndexColumn Id="o203">
+<a:ObjectID>B7B5429E-D47F-47CB-BD46-AD7A9697CA2C</a:ObjectID>
+<a:CreationDate>1794787905</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1794787905</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:GlobalObjectID/>
+<c:Column>
+<o:Column Ref="o57"/>
+</c:Column>
+<c:Elements>
+<o:Column Ref="o57"/>
+</c:Elements>
+</o:IndexColumn>
+</c:IndexColumns>
+</o:Index>
+<o:Index Id="o204">
+<a:ObjectID>DA4505A8-975B-4F5E-9FDE-2D9C52FC6EBC</a:ObjectID>
+<a:Name>idx_jobx_task_running</a:Name>
+<a:Code>idx_jobx_task_running</a:Code>
+<a:CreationDate>1794787905</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1794787905</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:Comment>部分索引（PD 物理模型不表达 WHERE，按普通索引建模）：
+WHERE status = 0 AND exec_end_ms IS NULL
+实际建索引语句见迁移基线 20261109000001_create-index.sql</a:Comment>
+<a:GlobalObjectID/>
+<c:IndexColumns>
+<o:IndexColumn Id="o205">
+<a:ObjectID>2BC59C29-92F6-42B5-A639-E4BDAB071E52</a:ObjectID>
+<a:CreationDate>1794787905</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1794787905</a:ModificationDate>
+<a:Modifier>张柏子</a:Modifier>
+<a:GlobalObjectID/>
+<c:Column>
+<o:Column Ref="o44"/>
+</c:Column>
+<c:Elements>
+<o:Column Ref="o44"/>
+</c:Elements>
+</o:IndexColumn>
+<o:IndexColumn Id="o206">
+<a:ObjectID>52CF7E55-915F-458A-96FD-10E88AA293A2</a:ObjectID>
+<a:CreationDate>1794787905</a:CreationDate>
+<a:Creator>张柏子</a:Creator>
+<a:ModificationDate>1794787905</a:ModificationDate>
 <a:Modifier>张柏子</a:Modifier>
 <a:GlobalObjectID/>
 <c:Column>
