@@ -45,3 +45,6 @@ jobx-api = { workspace = true, features = ["server"] }
 
 [build-dependencies]
 openssl = { version = "0.10.81", features = ["vendored"] }
+
+[dev-dependencies]
+tower = { workspace = true, features = ["util"] }

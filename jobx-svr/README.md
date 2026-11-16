@@ -135,6 +135,24 @@ cargo run -- --signal stop       # 优雅停止
 cargo run -- --signal kill       # 强制终止
 ```
 
+### 鉴权与运行环境
+
+jobx-svr **不自己做鉴权**：令牌验签与权限点都由 gatex 网关负责，服务端只做身份透传。
+运行环境用环境变量 `APP_PROFILE` 指定（`dev` / `test` / `prod`，缺省 `prod`，
+拼错会启动失败）：
+
+```bash
+# 本地开发：免登录，所有请求的操作人固定为 user_id=0（客户端传的 X-User-Id 会被覆盖）
+APP_PROFILE=dev cargo run
+
+# 生产：要求请求头带网关注入的 X-User-Id，缺失或不是 u64 一律 401
+APP_PROFILE=prod cargo run
+```
+
+注意：仓库里的 `jobx-svr.toml` 带的是本地开发值 `profile = "dev"`，生产部署必须用
+`APP_PROFILE=prod` 覆盖，并确保流量经过网关（或由反向代理写入 `X-User-Id`）。
+worker 的 `take` 请求由 feign 自带该头，不经过网关也能通过校验。
+
 ## API 接口
 
 服务启动后，访问 Swagger UI：`http://localhost:8080/swagger-ui`

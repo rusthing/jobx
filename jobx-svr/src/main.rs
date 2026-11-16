@@ -20,6 +20,11 @@ async fn setup(
     port: Option<u16>,
     old_pid: Option<u32>,
 ) -> Result<(), anyhow::Error> {
+    // 运行环境先校验再碰数据库：profile 拼错会让「是否免登录」走向不可预期的分支，
+    // 必须在监听端口前让进程起不来。
+    jobx_svr::config::validate_app_config(app_config.as_ref()).map_err(|error| anyhow!(error))?;
+    jobx_svr::config::set_app_profile(app_config.profile.as_deref());
+
     let db_url = app_config.db.get_url();
     db_migrate!(db_url);
 

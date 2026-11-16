@@ -1,3 +1,15 @@
+# jobx-svr 配置文件
+#
+# 运行环境由 `profile` 决定，推荐用环境变量覆盖而不是写死在文件里：
+#   APP_PROFILE=dev  ./jobx-svr   # 本地开发：免登录，操作人固定 user_id=0
+#   APP_PROFILE=prod ./jobx-svr   # 生产（默认）：要求网关注入 X-User-Id
+#
+# 这里写的是仓库内的本地开发默认值；**生产部署必须用 APP_PROFILE=prod 覆盖**
+# （代码里未配置任何 profile 时按 prod 处理，不会默认免登录）。
+#
+# jobx 不做令牌验签、不做权限点，鉴权统一交给 gatex 网关；服务端只做身份透传——
+# 非 dev 环境缺少 X-User-Id 的请求一律 401；profile 只接受 dev / test / prod，
+# 拼错会让进程启动失败（避免「以为在 dev、其实要求登录」这类错位）。
 profile = "dev"
 
 #[redis]
