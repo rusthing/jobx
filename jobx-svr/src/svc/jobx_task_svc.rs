@@ -1,14 +1,15 @@
 use crate::config::{JobxSchedulerConfig, get_jobx_scheduler_config};
 use crate::svc::JobxJobSvc;
 use anyhow::anyhow;
-use jobx_api::dic::TaskStatus;
+use jobx_api::dic::{JobType, TaskStatus};
+use jobx_api::dto::JobxTaskTakeDto;
 use jobx_api::mo::{jobx_job, jobx_task};
 use jobx_api::vo::JobxJobVo;
 use robotech::cst::user_id_cst::SYS_OPERATOR_USER_ID;
 use robotech::macros::svc;
 use sea_orm::sea_query::Expr;
 use sea_orm::{ColumnTrait, Condition, DbBackend, EntityTrait, QueryFilter, Statement};
-use tracing::warn;
+use tracing::{info, warn};
 use wheel_rs::time_utils::now_ms;
 
 #[svc(before_add = Self::before_add)]
@@ -17,9 +18,12 @@ pub struct JobxTaskSvc;
 impl JobxTaskSvc {
     /// # add 前置钩子：给高频任务算出「本段执行截止时刻」
     ///
-    /// 高频任务的一次分派代表**一段**连续执行：服务端 `recalc_next_assign_ms` 按
-    /// `high_freq_assign_interval`（默认 5 分钟）推进下一次分派，因此这段执行的天然
-    /// 终点就是「预定开始执行时刻 + 高频分派间隔」。
+    /// **固定间隔类**高频任务（`FixedDelay` / `FixedRate`）的一次分派代表**一段**连续执行：
+    /// 服务端 `recalc_next_assign_ms` 按 `high_freq_assign_interval`（默认 5 分钟）推进
+    /// 下一次分派，因此这段执行的天然终点就是「预定开始执行时刻 + 高频分派间隔」。
+    ///
+    /// Cron 计划不写这个字段：它的语义永远是「每个拍点执行一次」，不批成段
+    ///（见 `JobType::batches_high_freq_segment`）。
     ///
     /// ## 为什么必须由服务端算
     ///
@@ -43,7 +47,14 @@ impl JobxTaskSvc {
         _db: &C,
     ) -> Result<JobxTaskAddDto, SvcError> {
         let is_high_freq = add_dto.high_freq.flatten().unwrap_or(false);
-        if is_high_freq {
+        // 只有固定间隔类计划会把一次分派批成一段连续执行。Cron 即便被判成「高频」
+        // 也是每拍一次，不能写执行截止时刻，否则执行器会把 5 分钟内的多个拍点
+        // 合成一段循环（见 `JobType::batches_high_freq_segment`）。
+        let batches_segment = add_dto
+            .job_type
+            .map(JobType::batches_high_freq_segment)
+            .unwrap_or(false);
+        if is_high_freq && batches_segment {
             let JobxSchedulerConfig {
                 high_freq_assign_interval,
                 ..
@@ -82,30 +93,59 @@ impl JobxTaskSvc {
     /// # Worker 领取任务（在同一事务中创建 task 并推进 job 的下次分派时间）
     ///
     /// 由 Worker 通过 `/jobx/task/take` 接口调用。在一个数据库事务中完成：
-    /// 1. 根据 `add_dto` 创建一条任务记录（通过自动生成的 `add` 方法）
-    /// 2. 若任务关联了任务计划（`job_id` 不为空），推进该计划的下次分派时间
+    /// 1. 校验消息里的计划版本（见下）
+    /// 2. 根据 `add_dto` 创建一条任务记录（通过自动生成的 `add` 方法）
+    /// 3. 若任务关联了任务计划（`job_id` 不为空），推进该计划的下次分派时间
     ///
     /// 这样做保证任务创建与调度推进的原子性，避免任务已创建但调度未更新的不一致状态。
+    ///
+    /// ## 旧消息校验
+    ///
+    /// 计划快照发到 Redis Stream 之后，计划可能被改期、暂停或删除。此时再按旧快照建任务，
+    /// 会落一条**旧预定时刻**的记录、并让 `recalc_next_assign_ms` 从当前计划再往前推一格，
+    /// 白多跑一拍。所以执行器会把发布时的 `jobx_job.update_ms` 一起带上来：
+    ///
+    /// - 版本一致 → 正常建单；
+    /// - 版本不一致 / 计划已不存在 → 直接丢弃，返回成功但 `extra` 为空（消息照常 ACK）；
+    /// - 执行器没带版本（滚动升级中的老版本）→ 跳过校验，保持旧行为。
     ///
     /// 高频任务的「本段执行截止时刻」也在这里补齐（由 `before_add` 钩子写入
     /// `exec_deadline_ms`），执行器据此结束循环，不再依赖计划整体的 `valid_end_ms`。
     ///
     /// ## 参数
     ///
-    /// * `add_dto` - 任务新增 DTO，由 Worker 根据收到的任务消息构建（含 `job_id`、`executor_code` 等）
+    /// * `take_dto` - 领取请求：任务新增 DTO + 发布消息时的计划版本
     /// * `db` - 数据库连接（事务）
     ///
     /// ## 返回值
     ///
-    /// 返回新创建的任务视图对象。
+    /// 返回新创建的任务视图对象；消息过期时 `extra` 为空。
     #[db_unwrap(transaction_required)]
     pub async fn take<C>(
-        add_dto: JobxTaskAddDto,
+        take_dto: JobxTaskTakeDto,
         db: Option<&C>,
     ) -> Result<Ro<JobxTaskVo>, SvcError>
     where
         C: ConnectionTrait,
     {
+        let JobxTaskTakeDto {
+            task: add_dto,
+            job_update_ms,
+        } = take_dto;
+
+        if let (Some(job_id), Some(expected_update_ms)) =
+            (add_dto.job_id.flatten(), job_update_ms)
+            && !Self::is_job_version_current(job_id.value() as i64, expected_update_ms.value(), db)
+                .await?
+        {
+            info!(
+                "计划 {}(消息版本 {}) 已变更或不存在，丢弃过期的任务消息",
+                job_id.value(),
+                expected_update_ms.value()
+            );
+            return Ok(Ro::success("计划已变更，旧消息已丢弃".to_string()));
+        }
+
         let task_vo: JobxTaskVo =
             if let Some(task_model) = Self::add(add_dto, Some(db)).await?.extra {
                 task_model.into()
@@ -118,6 +158,25 @@ impl JobxTaskSvc {
         Ok(Ro::success("领取成功".to_string()).extra(Some(task_vo)))
     }
 
+    /// # 计划版本是否仍是消息里那一版
+    ///
+    /// 计划不存在（被删除）同样视为「版本不匹配」：这条消息已经没有对应的计划可推进。
+    async fn is_job_version_current<C>(
+        job_id: i64,
+        expected_update_ms: u64,
+        db: &C,
+    ) -> Result<bool, SvcError>
+    where
+        C: ConnectionTrait,
+    {
+        let job = jobx_job::Entity::find_by_id(job_id)
+            .one(db)
+            .await
+            .map_err(|e| anyhow!("校验计划版本失败: {e}"))?;
+
+        Ok(job.is_some_and(|job| job.update_ms as u64 == expected_update_ms))
+    }
+
     /// # 回收僵尸任务
     ///
     /// 把「服务端已建单、执行器再也不会来上报」的记录收敛成 `Failed`，分三条规则：
@@ -128,7 +187,9 @@ impl JobxTaskSvc {
     ///    进程在这个窗口里死掉，记录就永远停在这里。
     /// 2. **执行超时（普通任务）**：已开始执行（`exec_start_ms` 非空）但
     ///    `exec_start_ms < now - exec_timeout`，且不是高频任务。
-    /// 3. **执行超时（高频任务）**：同上，但阈值换成 `high_freq_exec_timeout`。
+    ///    Cron 计划即便 `high_freq = true` 也走这一条：它每拍只执行一次，不批成一段。
+    /// 3. **执行超时（高频任务）**：同上，但阈值换成 `high_freq_exec_timeout`，
+    ///    且只作用于固定间隔类计划。
     ///    高频任务本来就长时间连续执行，用普通阈值会全部误杀。
     ///
     /// ## 为什么必须由服务端做
@@ -197,7 +258,9 @@ impl JobxTaskSvc {
         .rows_affected;
 
         // ---- 规则 2：普通任务执行超时 ----
-        // 高频标记可能为 NULL（历史数据），按「非高频」处理
+        // 高频标记可能为 NULL（历史数据），按「非高频」处理。
+        // Cron 即便 `high_freq = true` 也不批成一段连续执行，仍按普通超时回收
+        //（见 `JobType::batches_high_freq_segment`），否则卡住的 cron 任务要等 6 小时。
         let timed_out = close(format!(
             "执行超时：已开始执行超过 {}s 仍未上报结果，由服务端巡检回收",
             exec_timeout_ms / 1000
@@ -206,7 +269,8 @@ impl JobxTaskSvc {
         .filter(
             Condition::any()
                 .add(jobx_task::Column::HighFreq.is_null())
-                .add(jobx_task::Column::HighFreq.eq(false)),
+                .add(jobx_task::Column::HighFreq.eq(false))
+                .add(jobx_task::Column::JobType.eq(JobType::Cron.value())),
         )
         .exec(db)
         .await
@@ -220,6 +284,7 @@ impl JobxTaskSvc {
         ))
         .filter(jobx_task::Column::ExecStartMs.lt(now - high_freq_exec_timeout_ms))
         .filter(jobx_task::Column::HighFreq.eq(true))
+        .filter(jobx_task::Column::JobType.ne(JobType::Cron.value()))
         .exec(db)
         .await
         .map_err(|e| anyhow!("回收「高频执行超时」僵尸任务失败: {e}"))?

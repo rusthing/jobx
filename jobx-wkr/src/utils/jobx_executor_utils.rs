@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use jobx_api::dic::{JobType, TaskStatus, TaskType};
 use jobx_api::vo::{JobxJobVo, JobxTaskVo};
 use jobx_api_client::{JobxApiClient, get_jobx_api_client};
-use jobx_api_client::dto::{JobxTaskAddDto, JobxTaskModifyDto};
+use jobx_api_client::dto::{JobxTaskAddDto, JobxTaskModifyDto, JobxTaskTakeDto};
 use redis::Value as RedisValue;
 use redis::streams::StreamId;
 use robotech::api::{U32, U64};
@@ -676,11 +676,19 @@ async fn handle_stream_message(
     };
     let user_id: U64 = job.updater_id.into();
     let add_dto = build_task_add_dto(&job, instance_id, user_id);
-    let task = match api_client.task.take(&add_dto).await {
+    // 把发布消息时的计划版本一起带上：计划在发布之后被改期/暂停/删除时，
+    // 服务端据此丢弃这条旧消息，不会按旧快照多建一条任务、多推一拍节奏。
+    let take_dto = JobxTaskTakeDto {
+        task: add_dto,
+        job_update_ms: Some(U64::from(job.update_ms)),
+    };
+    let task = match api_client.task.take(&take_dto).await {
         Ok(ro) => match ro.extra {
             Some(t) => t,
             None => {
-                warn!("领取任务失败: 返回数据为空");
+                // 服务端判定消息已过期（计划已变更/不存在）而丢弃：这不是故障，
+                // 正常 ACK 即可，让计划的新一轮消息接管。
+                info!("忽略过期的任务消息: {} (stream id={})", ro.msg, stream_id.id);
                 ack_message(
                     &stream_name,
                     executor_group.as_deref(),
@@ -793,7 +801,9 @@ async fn handle_stream_message(
         warn!("标记任务 {} 开始执行失败: {e:?}", task_id);
     }
 
-    let is_high_freq = task.high_freq == Some(true);
+    // 只有固定间隔类计划会把一次分派批成一段连续执行；Cron 即便被判成「高频」
+    // 也是每拍执行一次（见 `JobType::batches_high_freq_segment`）。
+    let is_high_freq = task.high_freq == Some(true) && task.job_type.batches_high_freq_segment();
 
     // 执行任务，收集状态和详情
     let (status, exec_detail) = if is_high_freq {
@@ -835,16 +845,20 @@ async fn handle_stream_message(
         let mut first_elapsed: Option<u64> = None;
         let mut last_elapsed: u64 = 0;
         let mut last_status = TaskStatus::Success;
+        // 一次都没执行就退出循环时的原因（调度积压导致开始太晚，或刚进来就停机）
+        let mut skip_reason: Option<&str> = None;
 
         loop {
             let loop_start = now_ms();
             if loop_start >= end_ms {
+                skip_reason = Some("已越过本段执行截止时刻");
                 break;
             }
             // 停机时不再开始新一轮：高频循环每轮都可能很慢，继续跑只会拖长退出时间。
             // 已经跑完的轮次照常计入统计，下面的统一上报会把结果写回去。
             if is_shutting_down() {
                 info!("高频任务 {} 收到停机信号，结束循环", task_id);
+                skip_reason = Some("收到停机信号");
                 break;
             }
 
@@ -934,13 +948,25 @@ async fn handle_stream_message(
             total_count,
             success_count,
             fail_count,
-            min_elapsed,
+            if total_count > 0 { min_elapsed } else { 0 },
             max_elapsed,
             avg_elapsed,
             first_elapsed.unwrap_or(0),
             last_elapsed,
         );
-        let status = last_status;
+
+        // 一次都没跑不能算成功：上报「跳过」，并写清为什么没跑（开始太晚/停机）。
+        // 否则「共0次」挂在成功里，既污染成功率，也看不出调度是否在积压。
+        let (status, exec_detail) = if total_count == 0 {
+            let reason = skip_reason.unwrap_or("未知原因");
+            warn!("高频任务 {} 一次都没执行，上报跳过：{}", task_id, reason);
+            (
+                TaskStatus::Skipped,
+                format!("未执行（{reason}）| {exec_detail}"),
+            )
+        } else {
+            (last_status, exec_detail)
+        };
         (status, exec_detail)
     } else {
         // 停机宽限：已经在跑的任务不硬砍（可能正在写库/投递），给它 `shutdown_grace`

@@ -16,12 +16,15 @@ impl JobxTaskApiClient {
 
     pub async fn take(
         &self,
-        dto: &JobxTaskAddDto,
+        dto: &JobxTaskTakeDto,
     ) -> Result<Ro<JobxTaskVo>, robotech::api_client::ApiClientError> {
         let url = "/jobx/task/take".to_string();
-        let headers = Self::build_headers(dto._current_user_id.value(), dto._current_ms.map(|m| m.value()))?;
+        let headers = Self::build_headers(
+            dto.task._current_user_id.value(),
+            dto.task._current_ms.map(|m| m.value()),
+        )?;
         self.client
-            .request::<JobxTaskAddDto, JobxTaskVo>(
+            .request::<JobxTaskTakeDto, JobxTaskVo>(
                 ::reqwest::Method::POST,
                 &url,
                 None,

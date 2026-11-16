@@ -199,6 +199,7 @@ export function TasksPage() {
               { value: TASK_STATUS.running, label: "运行中" },
               { value: TASK_STATUS.success, label: "成功" },
               { value: TASK_STATUS.failed, label: "失败" },
+              { value: TASK_STATUS.skipped, label: "跳过" },
             ]}
           />
 
