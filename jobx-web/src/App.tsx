@@ -42,7 +42,7 @@ const queryClient = new QueryClient({
 });
 
 /** 切换数据源后必须清缓存，否则演示数据会混进实时视图 */
-function DataModeBridge() {
+export function DataModeBridge() {
   const client = useQueryClient();
   useEffect(
     () =>
@@ -54,23 +54,35 @@ function DataModeBridge() {
   return null;
 }
 
+/**
+ * 路由表本体：独立入口与联邦入口共用。外层需已有 Router 与 QueryClientProvider。
+ */
+export function AppRoutes() {
+  return (
+    <>
+      <DataModeBridge />
+      <Routes>
+        <Route path="login" element={<LoginPage />} />
+        <Route element={<AuthGate><AppShell /></AuthGate>}>
+          <Route index element={<OverviewPage />} />
+          <Route path="jobs" element={<JobsPage />} />
+          <Route path="groups" element={<GroupsPage />} />
+          <Route path="tasks" element={<TasksPage />} />
+          <Route path="executors" element={<ExecutorsPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </>
+  );
+}
+
+/** 独立入口：Provider / Router 都在这里，联邦入口则自带一套。 */
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         <Router basename={BASENAME || undefined}>
-          <DataModeBridge />
-          <Routes>
-            <Route path="login" element={<LoginPage />} />
-            <Route element={<AuthGate><AppShell /></AuthGate>}>
-              <Route index element={<OverviewPage />} />
-              <Route path="jobs" element={<JobsPage />} />
-              <Route path="groups" element={<GroupsPage />} />
-              <Route path="tasks" element={<TasksPage />} />
-              <Route path="executors" element={<ExecutorsPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Route>
-          </Routes>
+          <AppRoutes />
         </Router>
       </ToastProvider>
     </QueryClientProvider>

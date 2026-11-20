@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { federation } from "@module-federation/vite";
 import { fileURLToPath, URL } from "node:url";
 
 /**
@@ -17,10 +18,29 @@ import { fileURLToPath, URL } from "node:url";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const base = env.PUBLIC_BASE?.trim() || "/";
+  const sharedReact = { singleton: true, allowNodeModulesSuffixMatch: true } as const;
 
   return {
     base,
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      // 联邦只暴露一个页面级模块；独立站照常 createRoot，两者共用 AppRoutes。
+      federation({
+        name: "jobx-web",
+        filename: "remoteEntry.js",
+        exposes: { "./jobx-app": "./src/federation/JobxFederatedApp.tsx" },
+        shared: {
+          react: sharedReact,
+          "react/jsx-runtime": sharedReact,
+          "react-dom": sharedReact,
+          "react-dom/client": sharedReact,
+        },
+        // Tailwind 生成的 @theme 变量在页面样式里，必须随暴露模块一起出。
+        bundleAllCSS: true,
+        manifest: true,
+      }),
+      react(),
+      tailwindcss(),
+    ],
     resolve: {
       alias: {
         "@": fileURLToPath(new URL("./src", import.meta.url)),
@@ -28,6 +48,9 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5180,
+      // dev 下联邦 runtime 要用绝对地址取 remoteEntry.js，否则 uiam 会去自己的
+      // 端口找，拿到 uiam 的 index.html。
+      origin: env.VITE_DEV_ORIGIN?.trim() || "http://localhost:5180",
       proxy: {
         "/api": {
           target: env.VITE_PROXY_TARGET?.trim() || "http://127.0.0.1:9001",
