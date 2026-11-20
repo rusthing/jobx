@@ -21,7 +21,7 @@ const TITLES: Record<string, string> = {
 function OperatorBadge() {
   const operatorId = getOperatorId();
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-1" data-federated-hide-user>
       <span
         className="flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface pl-1.5 pr-2 text-[12px] font-medium text-ink-soft md:h-8"
         title="当前登录用户（来自统一登录态）"
