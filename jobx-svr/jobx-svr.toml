@@ -12,11 +12,11 @@
 # 拼错会让进程启动失败（避免「以为在 dev、其实要求登录」这类错位）。
 profile = "dev"
 
-#[redis]
-#url = "redis://:xxxxxxxx@redis:6379"
-#
-#[db]
-#url = "postgres://jobx:jobx@pgsql:5432/jobx"
+[redis]
+url = "redis://:xxxxxxxx@redis:6379"
+
+[db]
+url = "postgres://jobx:jobx@pgsql:5432/jobx"
 
 [web]
 port = 9001
