@@ -39,12 +39,12 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-[228px] shrink-0 flex-col border-r border-line bg-surface md:flex">
+    <aside className="hidden h-full min-h-0 w-[228px] shrink-0 flex-col border-r border-line bg-surface md:flex">
       <div className="flex h-14 items-center border-b border-line px-4">
         <Wordmark />
       </div>
 
-      <nav className="flex-1 px-2.5 pt-4">
+      <nav className="min-h-0 flex-1 overflow-y-auto px-2.5 pt-4">
         <p className="mb-1.5 px-2 text-[10.5px] font-medium tracking-[0.12em] text-muted/80">运行</p>
         <ul className="space-y-0.5">
           {NAV.map((item) => (
