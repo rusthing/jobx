@@ -14,6 +14,7 @@ import {
   RotateCw,
   Search,
 } from "lucide-react";
+import { overlayPortalTarget } from "@/components/ui/portal";
 import { cn } from "@/lib/utils";
 import { getDataMode, setDataMode } from "@/lib/api";
 import { useAllJobs } from "@/hooks/use-jobs";
@@ -198,6 +199,6 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         </div>
       </div>
     </div>,
-    document.body,
+    overlayPortalTarget(),
   );
 }

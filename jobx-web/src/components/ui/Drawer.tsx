@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { overlayPortalTarget } from "@/components/ui/portal";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { cn } from "@/lib/utils";
 import { IconButton } from "./Button";
@@ -126,7 +127,7 @@ export function Drawer({
         )}
       </div>
     </div>,
-    document.body,
+    overlayPortalTarget(),
   );
 }
 
@@ -202,6 +203,6 @@ export function ConfirmDialog({
         </div>
       </div>
     </div>,
-    document.body,
+    overlayPortalTarget(),
   );
 }
