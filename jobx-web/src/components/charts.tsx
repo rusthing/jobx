@@ -18,10 +18,10 @@ export function Sparkline({
   className?: string;
 }) {
   const colors = {
-    accent: "#146b57",
-    success: "#17794a",
-    danger: "#b3392e",
-    info: "#2a5bd7",
+    accent: "var(--color-accent)",
+    success: "var(--color-success)",
+    danger: "var(--color-danger)",
+    info: "var(--color-info)",
   } as const;
 
   const path = useMemo(() => {

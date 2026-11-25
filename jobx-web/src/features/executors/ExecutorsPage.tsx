@@ -111,7 +111,7 @@ export function ExecutorsPage() {
             action={
               <Link
                 to="/jobs?new=1"
-                className="inline-flex h-8 items-center rounded-lg bg-accent px-3 text-[13px] font-medium text-white hover:bg-accent-strong"
+                className="inline-flex h-8 items-center rounded-lg bg-accent px-3 text-[13px] font-medium text-on-accent hover:bg-accent-strong"
               >
                 新建计划
               </Link>

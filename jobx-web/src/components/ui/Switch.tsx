@@ -27,7 +27,7 @@ export function Switch({ checked, onChange, disabled, label, size = "md" }: Swit
         track,
         checked
           ? "border-accent-strong/30 bg-accent"
-          : "border-line-strong/60 bg-[#e6e8e1] hover:bg-[#dde0d8]",
+          : "border-line-strong/60 bg-line-strong/50 hover:bg-line-strong/65",
         disabled && "cursor-not-allowed opacity-50",
       )}
     >

@@ -8,7 +8,6 @@ import {
   Pencil,
   Play,
   Plus,
-  RefreshCw,
   Search,
   Trash2,
 } from "lucide-react";
@@ -98,7 +97,7 @@ export function JobsPage() {
     [keyword, type, enabled, executor, group, rangeStart, page, sortNext],
   );
 
-  const { data, isLoading, isFetching, error, refetch } = useJobsPage(query);
+  const { data, isLoading, error, refetch } = useJobsPage(query);
   const allJobs = useAllJobs();
   const allGroups = useAllGroups();
   const { create, update, remove, trigger, setEnabled: toggleEnabledMutation } = useJobMutations();
@@ -274,14 +273,6 @@ export function JobsPage() {
         }
         actions={
           <>
-            <Button
-              size="sm"
-              variant="ghost"
-              icon={<RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />}
-              onClick={() => refetch()}
-            >
-              刷新
-            </Button>
             <Button size="sm" variant="primary" icon={<Plus className="size-3.5" />} onClick={openNew}>
               新建计划
             </Button>
@@ -290,7 +281,7 @@ export function JobsPage() {
       />
 
       <Panel className="overflow-hidden">
-        <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2.5">
+        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto border-b border-line px-3 py-2.5">
           <div className="relative min-w-[200px] flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted" />
             <Input

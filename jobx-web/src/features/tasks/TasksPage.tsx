@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Activity, CircleSlash, RefreshCw, Search } from "lucide-react";
+import { Activity, CircleSlash, Search } from "lucide-react";
 import { PageHeader } from "@/components/page";
 import { Panel, PanelState, Skeleton } from "@/components/ui/Panel";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -93,7 +93,7 @@ export function TasksPage() {
     [keyword, status, taskType, executor, rangeStart, page],
   );
 
-  const { data, isLoading, isFetching, error, refetch, dataUpdatedAt } = useTasksPage(query, {
+  const { data, isLoading, error, refetch, dataUpdatedAt } = useTasksPage(query, {
     poll: auto,
   });
   const allJobs = useAllJobs();
@@ -159,20 +159,12 @@ export function TasksPage() {
                 label="自动刷新"
               />
             </label>
-            <Button
-              size="sm"
-              variant="ghost"
-              icon={<RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />}
-              onClick={() => refetch()}
-            >
-              刷新
-            </Button>
           </>
         }
       />
 
       <Panel className="overflow-hidden">
-        <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2.5">
+        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto border-b border-line px-3 py-2.5">
           <div className="relative min-w-[200px] flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted" />
             <Input

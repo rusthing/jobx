@@ -26,10 +26,10 @@ import { percent, shortId } from "@/lib/utils";
 import { describeCron } from "@/lib/cron";
 
 const TYPE_COLORS: Record<JobType, string> = {
-  [JOB_TYPE.cron]: "#146b57",
-  [JOB_TYPE.fixedDelay]: "#2a5bd7",
-  [JOB_TYPE.fixedRate]: "#6344c6",
-  [JOB_TYPE.manual]: "#b8bdb2",
+  [JOB_TYPE.cron]: "var(--color-accent)",
+  [JOB_TYPE.fixedDelay]: "var(--color-info)",
+  [JOB_TYPE.fixedRate]: "var(--color-violet)",
+  [JOB_TYPE.manual]: "var(--color-muted)",
 };
 
 /** 把调度类型映射到统计接口 `jobs` 上的字段名 */
